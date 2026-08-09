@@ -1,0 +1,6 @@
+{
+  "name": "Group Food Ordering Web App",
+  "description": "Create group food orders, share a link, collect member food choices, and track payments easily.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
