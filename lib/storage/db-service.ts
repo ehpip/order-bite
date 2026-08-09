@@ -588,15 +588,19 @@ class SupabaseDatabase {
       return localDb.getStores();
     }
     if (data.length === 0) {
-      const localStores = await localDb.getStores();
-      for (const ls of localStores) {
-        await this.saveStore(ls);
+      try {
+        const localStores = await localDb.getStores();
+        for (const ls of localStores) {
+          await this.saveStore(ls);
+        }
+        const { data: seeded } = await client.from('stores').select('*').order('created_at', { ascending: false });
+        if (seeded && seeded.length > 0) {
+          return seeded as Store[];
+        }
+      } catch (err) {
+        console.warn('Auto-seeding stores into Supabase failed (likely RLS policy). Returning local defaults.');
       }
-      const { data: seeded } = await client.from('stores').select('*').order('created_at', { ascending: false });
-      if (seeded && seeded.length > 0) {
-        return seeded as Store[];
-      }
-      return localStores;
+      return localDb.getStores();
     }
     return data as Store[];
   }
@@ -646,7 +650,11 @@ class SupabaseDatabase {
         status: storeData.status || 'active'
       }).select().single();
       if (error || !data) {
-        console.error('Supabase insert store error:', error);
+        if (error?.code === '42501') {
+          console.warn('Supabase RLS Error (42501): Public write access is disabled by Row Level Security in your Supabase project. Please run the RLS SQL script in Supabase SQL Editor.');
+        } else {
+          console.error('Supabase insert store error:', error);
+        }
         return localDb.saveStore(storeData);
       }
       return data as Store;
