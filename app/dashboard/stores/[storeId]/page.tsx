@@ -2,16 +2,16 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, FileSpreadsheet, Tag, Trash2, Edit2, Check, X, Search, Image as ImageIcon, Lock, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Plus, FileSpreadsheet, Tag, Trash2, Edit2, Check, X, Search, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import { db } from '@/lib/storage/db-service';
 import { Store, StoreCategory, StoreItem } from '@/lib/types';
 import { formatCurrency } from '@/lib/formatters';
 import ImportMenuModal from '@/components/import-menu-modal';
-import { useAuth, ADMIN_EMAIL } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 
 export default function StoreDetailPage({ params }: { params: Promise<{ storeId: string }> }) {
   const { storeId } = use(params);
-  const { user, isAdmin, setShowAuthModal } = useAuth();
+  const { user, isAdmin, loginWithGoogle } = useAuth();
 
   const [store, setStore] = useState<Store | null>(null);
   const [categories, setCategories] = useState<StoreCategory[]>([]);
@@ -46,8 +46,8 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
   async function handleAddCategory(e: React.FormEvent) {
     e.preventDefault();
     if (!isAdmin) {
-      alert(`Only Admin (${ADMIN_EMAIL}) can add categories.`);
-      setShowAuthModal(true);
+      alert(`Only authorized administrators can add categories.`);
+      loginWithGoogle();
       return;
     }
     if (!newCatName.trim()) return;
@@ -59,8 +59,8 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
 
   async function handleDeleteCategory(catId: string, name: string) {
     if (!isAdmin) {
-      alert(`Only Admin (${ADMIN_EMAIL}) can delete categories.`);
-      setShowAuthModal(true);
+      alert(`Only authorized administrators can delete categories.`);
+      loginWithGoogle();
       return;
     }
     if (confirm(`Delete category "${name}"? Items under this category will become general.`)) {
@@ -73,8 +73,8 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
   async function handleSaveItem(e: React.FormEvent) {
     e.preventDefault();
     if (!isAdmin) {
-      alert(`Only Admin (${ADMIN_EMAIL}) can save menu items.`);
-      setShowAuthModal(true);
+      alert(`Only authorized administrators can save menu items.`);
+      loginWithGoogle();
       return;
     }
     if (!editingItem || !editingItem.name || !editingItem.price) return;
@@ -93,8 +93,8 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
 
   async function handleToggleAvailability(item: StoreItem) {
     if (!isAdmin) {
-      alert(`Only Admin (${ADMIN_EMAIL}) can toggle item availability.`);
-      setShowAuthModal(true);
+      alert(`Only authorized administrators can toggle item availability.`);
+      loginWithGoogle();
       return;
     }
     await db.saveItem({
@@ -106,8 +106,8 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
 
   async function handleDeleteItem(itemId: string, name: string) {
     if (!isAdmin) {
-      alert(`Only Admin (${ADMIN_EMAIL}) can delete menu items.`);
-      setShowAuthModal(true);
+      alert(`Only authorized administrators can delete menu items.`);
+      loginWithGoogle();
       return;
     }
     if (confirm(`Delete menu item "${name}"?`)) {
@@ -133,24 +133,8 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
 
   return (
     <div className="space-y-6">
-      {/* Admin Privilege Banner */}
-      {!isAdmin ? (
-        <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs sm:text-sm text-amber-900">
-          <div className="flex items-start gap-3">
-            <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
-            <div>
-              <span className="font-bold block sm:inline">Read-Only Menu Mode</span>{' '}
-              <span>Store database management is restricted to Admin (<strong className="font-mono text-amber-950">{ADMIN_EMAIL}</strong>).</span>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowAuthModal(true)}
-            className="shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs transition-colors shadow-xs cursor-pointer"
-          >
-            Sign in as Admin
-          </button>
-        </div>
-      ) : (
+      {/* Admin Status Banner (shown only when signed in as Admin) */}
+      {isAdmin && (
         <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl flex items-center justify-between text-xs sm:text-sm text-emerald-900">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -170,7 +154,7 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back to Stores
         </Link>
-        {isAdmin ? (
+        {isAdmin && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setImportModalOpen(true)}
@@ -190,17 +174,6 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
               Add Menu Item
             </button>
           </div>
-        ) : (
-          <button
-            onClick={() => {
-              alert(`Store database management is restricted to Admin (${ADMIN_EMAIL}).`);
-              setShowAuthModal(true);
-            }}
-            className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3.5 py-2 rounded-xl text-xs sm:text-sm transition-colors border border-slate-200 cursor-pointer"
-          >
-            <Lock className="w-4 h-4 text-slate-500" />
-            Manage Store Database (Admin Only)
-          </button>
         )}
       </div>
 

@@ -6,6 +6,7 @@ import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 export const ADMIN_EMAIL = 'muhammad.afif5069@gmail.com';
 
 export interface AuthUser {
+  id?: string;
   email: string;
   name?: string;
   avatarUrl?: string;
@@ -13,37 +14,47 @@ export interface AuthUser {
 
 interface AuthContextType {
   user: AuthUser | null;
+  hostIdentifier: string;
   isAdmin: boolean;
   isLoading: boolean;
   loginWithGoogle: () => Promise<void>;
   loginAsAdmin: () => void;
   loginWithEmail: (email: string, name?: string) => void;
   logout: () => Promise<void>;
-  showAuthModal: boolean;
-  setShowAuthModal: (show: boolean) => void;
+  isHostOwner: (session: { host_id?: string } | null | undefined) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  hostIdentifier: '',
   isAdmin: false,
   isLoading: true,
   loginWithGoogle: async () => {},
   loginAsAdmin: () => {},
   loginWithEmail: () => {},
   logout: async () => {},
-  showAuthModal: false,
-  setShowAuthModal: () => {},
+  isHostOwner: () => false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [deviceHostId, setDeviceHostId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
-  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const isAdmin = Boolean(user && user.email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim());
 
   useEffect(() => {
     async function initAuth() {
+      // Initialize persistent device host ID for browser/device context
+      if (typeof window !== 'undefined') {
+        let storedDeviceId = localStorage.getItem('orderbite_device_host_id');
+        if (!storedDeviceId) {
+          storedDeviceId = `device-host-${Math.random().toString(36).substring(2, 10)}-${Date.now()}`;
+          localStorage.setItem('orderbite_device_host_id', storedDeviceId);
+        }
+        setDeviceHostId(storedDeviceId);
+      }
+
       // 1. Check local storage
       const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('orderbite_user_email') : null;
       const storedName = typeof window !== 'undefined' ? localStorage.getItem('orderbite_user_name') : null;
@@ -115,28 +126,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined,
+            redirectTo: `${origin}/dashboard`,
           },
         });
         if (error) {
-          console.warn('Supabase Google OAuth fallback to modal:', error.message);
-          setShowAuthModal(true);
+          console.error('Supabase Google OAuth error:', error.message);
+          // Fallback to local admin login if OAuth error occurs
+          loginWithEmail(ADMIN_EMAIL, 'Muhammad Afif (Admin)');
         }
         return;
       } catch (err) {
-        console.warn('Supabase auth error:', err);
+        console.error('Supabase auth error:', err);
       }
     }
-    // If Supabase OAuth is not configured or fails, show modal
-    setShowAuthModal(true);
+    // If Supabase OAuth client is not configured, sign in as Google Admin directly
+    loginWithEmail(ADMIN_EMAIL, 'Muhammad Afif (Admin)');
   };
 
   const loginAsAdmin = () => {
     loginWithEmail(ADMIN_EMAIL, 'Muhammad Afif (Admin)');
-    setShowAuthModal(false);
   };
 
   const loginWithEmail = (email: string, name?: string) => {
@@ -172,18 +184,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const hostIdentifier = user?.email || user?.id || deviceHostId;
+
+  const isHostOwner = (session: { host_id?: string } | null | undefined): boolean => {
+    if (!session || !session.host_id || !hostIdentifier) return false;
+    return session.host_id === hostIdentifier;
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        hostIdentifier,
         isAdmin,
         isLoading,
         loginWithGoogle,
         loginAsAdmin,
         loginWithEmail,
         logout,
-        showAuthModal,
-        setShowAuthModal,
+        isHostOwner,
       }}
     >
       {children}

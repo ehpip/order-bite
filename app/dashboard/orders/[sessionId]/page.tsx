@@ -3,17 +3,19 @@
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Share2, Clock, CheckCircle2, AlertCircle, Copy, Users, Lock, Unlock, RefreshCw, Plus, Trash2, ShoppingBag, CreditCard, X } from 'lucide-react';
+import { ArrowLeft, Share2, Clock, CheckCircle2, AlertCircle, Copy, Users, Lock, Unlock, RefreshCw, Plus, Trash2, ShoppingBag, CreditCard, X, ShieldAlert } from 'lucide-react';
 import { db } from '@/lib/storage/db-service';
 import { OrderSession, MemberOrder, MenuSnapshot, MenuSnapshotItem, MemberPaymentStatus } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import CountdownBadge from '@/components/ui/countdown-badge';
 import ShareQRDialog from '@/components/share-qr-dialog';
 import CopySummaryMenu from '@/components/copy-summary-menu';
+import { useAuth } from '@/lib/auth-context';
 
 export default function SessionManagementPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
   const searchParams = useSearchParams();
+  const { user, hostIdentifier, isHostOwner, isLoading: authLoading } = useAuth();
 
   const [session, setSession] = useState<OrderSession | null>(null);
   const [snapshot, setSnapshot] = useState<MenuSnapshot | null>(null);
@@ -47,15 +49,17 @@ export default function SessionManagementPage({ params }: { params: Promise<{ se
     setOrders(memberOrders);
   }
 
+  const isOwner = isHostOwner(session);
+
   async function handleToggleStatus() {
-    if (!session) return;
+    if (!session || !isOwner) return;
     const newStatus = session.status === 'open' ? 'closed' : 'open';
     await db.updateSession(session.id, { status: newStatus });
     loadData();
   }
 
   async function handleExtendDeadline() {
-    if (!session) return;
+    if (!session || !isOwner) return;
     const currentDeadline = new Date(session.deadline).getTime();
     const now = Date.now();
     const base = currentDeadline > now ? currentDeadline : now;
@@ -67,11 +71,13 @@ export default function SessionManagementPage({ params }: { params: Promise<{ se
   }
 
   async function handleUpdatePayment(orderId: string, status: MemberPaymentStatus) {
+    if (!isOwner) return;
     await db.updateMemberPaymentStatus(orderId, status);
     loadData();
   }
 
   async function handleDeleteMemberOrder(orderId: string, memberName: string) {
+    if (!isOwner) return;
     if (confirm(`Remove order for "${memberName}"?`)) {
       await db.deleteMemberOrder(orderId);
       loadData();
@@ -79,17 +85,41 @@ export default function SessionManagementPage({ params }: { params: Promise<{ se
   }
 
   async function handleDuplicateSession() {
-    if (!session) return;
+    if (!session || !isOwner) return;
     const newName = `${session.name} (Copy)`;
     const newDeadline = new Date(Date.now() + 45 * 60 * 1000).toISOString();
-    const newSess = await db.duplicateSession(session.id, newName, newDeadline);
+    const newSess = await db.duplicateSession(session.id, newName, newDeadline, hostIdentifier);
     if (newSess) {
       window.location.href = `/dashboard/orders/${newSess.id}?share=true`;
     }
   }
 
-  if (!session) {
+  if (!session || authLoading) {
     return <div className="p-12 text-center text-slate-500 text-sm">Loading session details...</div>;
+  }
+
+  if (!isOwner) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-2xs max-w-md w-full text-center space-y-4">
+          <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto font-bold text-lg">
+            <Lock className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">Session Access Restricted</h2>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            You do not have permission to manage this group order session. Host access is scoped strictly to session ownership.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/dashboard/orders"
+              className="inline-block bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition-colors shadow-xs"
+            >
+              Back to My Sessions
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Calculate totals

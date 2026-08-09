@@ -2,14 +2,16 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { PlusCircle, ListOrdered, Share2, ArrowRight, Clock, Users, DollarSign, Filter, Search } from 'lucide-react';
+import { PlusCircle, ListOrdered, Share2, ArrowRight, Clock, Users, DollarSign, Filter, Search, LogIn } from 'lucide-react';
 import { db } from '@/lib/storage/db-service';
 import { OrderSession, MemberOrder } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import CountdownBadge from '@/components/ui/countdown-badge';
 import ShareQRDialog from '@/components/share-qr-dialog';
+import { useAuth } from '@/lib/auth-context';
 
 export default function SessionsListPage() {
+  const { user, hostIdentifier, isHostOwner, loginWithGoogle, isLoading } = useAuth();
   const [sessions, setSessions] = useState<OrderSession[]>([]);
   const [ordersMap, setOrdersMap] = useState<Map<string, MemberOrder[]>>(new Map());
   const [search, setSearch] = useState('');
@@ -17,11 +19,13 @@ export default function SessionsListPage() {
   const [shareSession, setShareSession] = useState<OrderSession | null>(null);
 
   useEffect(() => {
-    loadSessions();
-  }, []);
+    if (!isLoading) {
+      loadSessions();
+    }
+  }, [user, hostIdentifier, isLoading]);
 
   async function loadSessions() {
-    const list = await db.getSessions();
+    const list = await db.getSessions(hostIdentifier);
     setSessions(list);
 
     const map = new Map<string, MemberOrder[]>();
@@ -140,12 +144,14 @@ export default function SessionsListPage() {
                     >
                       <Share2 className="w-4 h-4 text-orange-600" />
                     </button>
-                    <Link
-                      href={`/dashboard/orders/${session.id}`}
-                      className="inline-flex items-center gap-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl transition-colors shadow-2xs"
-                    >
-                      Manage Order <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
+                    {isHostOwner(session) && (
+                      <Link
+                        href={`/dashboard/orders/${session.id}`}
+                        className="inline-flex items-center gap-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl transition-colors shadow-2xs"
+                      >
+                        Manage Order <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>

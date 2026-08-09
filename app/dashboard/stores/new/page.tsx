@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Check, Lock, Sparkles } from 'lucide-react';
 import { db } from '@/lib/storage/db-service';
-import { useAuth, ADMIN_EMAIL } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 
 const storeSchema = z.object({
   name: z.string().min(2, 'Store name must be at least 2 characters'),
@@ -25,7 +25,7 @@ type StoreFormValues = z.infer<typeof storeSchema>;
 
 export default function NewStorePage() {
   const router = useRouter();
-  const { isAdmin, setShowAuthModal } = useAuth();
+  const { isAdmin, loginWithGoogle } = useAuth();
   const [submitting, setSubmitting] = useState(false);
 
   const {
@@ -41,8 +41,8 @@ export default function NewStorePage() {
 
   const onSubmit = async (data: StoreFormValues) => {
     if (!isAdmin) {
-      alert(`Only Admin (${ADMIN_EMAIL}) can save new stores.`);
-      setShowAuthModal(true);
+      alert(`Only administrators can save new stores.`);
+      loginWithGoogle();
       return;
     }
     try {
@@ -68,13 +68,13 @@ export default function NewStorePage() {
             </span>
             <h2 className="text-xl font-bold text-slate-900">Store Creation Restricted</h2>
             <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed max-w-md mx-auto">
-              Creating new stores in the database is strictly reserved for the administrator account (<strong className="font-mono text-orange-700">{ADMIN_EMAIL}</strong>).
+              Creating new stores in the database is strictly reserved for authorized administrator accounts.
             </p>
           </div>
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
-              onClick={() => setShowAuthModal(true)}
+              onClick={() => loginWithGoogle()}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition-colors shadow-xs cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
