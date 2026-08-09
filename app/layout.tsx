@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import MantineWrapper from '@/components/mantine-wrapper';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Group Food Ordering App',
@@ -10,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body suppressHydrationWarning className="bg-slate-50 text-slate-900 antialiased min-h-screen">
+      <body suppressHydrationWarning className={`${inter.className} bg-slate-50 text-slate-900 antialiased min-h-screen`}>
         <MantineWrapper>
           {children}
         </MantineWrapper>
@@ -18,4 +21,5 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
+
 
