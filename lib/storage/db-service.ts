@@ -565,4 +565,555 @@ class LocalDatabase {
   }
 }
 
-export const db = new LocalDatabase();
+const localDb = new LocalDatabase();
+
+class SupabaseDatabase {
+  private get client() {
+    return getSupabaseClient();
+  }
+
+  // --- STORES ---
+  async getStores(): Promise<Store[]> {
+    const client = this.client;
+    if (!client) return localDb.getStores();
+    const { data, error } = await client.from('stores').select('*').order('created_at', { ascending: false });
+    if (error || !data) {
+      console.warn('Supabase getStores fallback to local:', error);
+      return localDb.getStores();
+    }
+    return data as Store[];
+  }
+
+  async getStoreById(id: string): Promise<Store | null> {
+    const client = this.client;
+    if (!client) return localDb.getStoreById(id);
+    const { data, error } = await client.from('stores').select('*').eq('id', id).maybeSingle();
+    if (error || !data) return localDb.getStoreById(id);
+    return data as Store;
+  }
+
+  async saveStore(storeData: Partial<Store> & { name: string }): Promise<Store> {
+    const client = this.client;
+    if (!client) return localDb.saveStore(storeData);
+    if (storeData.id) {
+      const { data, error } = await client.from('stores').update({
+        name: storeData.name,
+        description: storeData.description || '',
+        logo: storeData.logo || '',
+        cover_image: storeData.cover_image || '',
+        address: storeData.address || '',
+        phone: storeData.phone || '',
+        website: storeData.website || '',
+        status: storeData.status || 'active',
+        updated_at: new Date().toISOString()
+      }).eq('id', storeData.id).select().single();
+      if (error || !data) return localDb.saveStore(storeData);
+      return data as Store;
+    } else {
+      const { data, error } = await client.from('stores').insert({
+        name: storeData.name,
+        description: storeData.description || '',
+        logo: storeData.logo || '',
+        cover_image: storeData.cover_image || '',
+        address: storeData.address || '',
+        phone: storeData.phone || '',
+        website: storeData.website || '',
+        status: storeData.status || 'active'
+      }).select().single();
+      if (error || !data) return localDb.saveStore(storeData);
+      return data as Store;
+    }
+  }
+
+  async deleteStore(id: string): Promise<void> {
+    const client = this.client;
+    if (!client) return localDb.deleteStore(id);
+    await client.from('stores').delete().eq('id', id);
+  }
+
+  // --- CATEGORIES ---
+  async getCategories(storeId: string): Promise<StoreCategory[]> {
+    const client = this.client;
+    if (!client) return localDb.getCategories(storeId);
+    const { data, error } = await client.from('store_categories').select('*').eq('store_id', storeId).order('sort_order', { ascending: true });
+    if (error || !data) return localDb.getCategories(storeId);
+    return data as StoreCategory[];
+  }
+
+  async saveCategory(storeId: string, name: string): Promise<StoreCategory> {
+    const client = this.client;
+    if (!client) return localDb.saveCategory(storeId, name);
+    const { data, error } = await client.from('store_categories').insert({
+      store_id: storeId,
+      name,
+      sort_order: 1
+    }).select().single();
+    if (error || !data) return localDb.saveCategory(storeId, name);
+    return data as StoreCategory;
+  }
+
+  async deleteCategory(id: string): Promise<void> {
+    const client = this.client;
+    if (!client) return localDb.deleteCategory(id);
+    await client.from('store_categories').delete().eq('id', id);
+  }
+
+  // --- ITEMS ---
+  async getItems(storeId: string): Promise<StoreItem[]> {
+    const client = this.client;
+    if (!client) return localDb.getItems(storeId);
+    const { data, error } = await client.from('store_items').select('*').eq('store_id', storeId).order('sort_order', { ascending: true });
+    if (error || !data) return localDb.getItems(storeId);
+    return data as StoreItem[];
+  }
+
+  async saveItem(itemData: Partial<StoreItem> & { store_id: string; name: string; price: number }): Promise<StoreItem> {
+    const client = this.client;
+    if (!client) return localDb.saveItem(itemData);
+    if (itemData.id) {
+      const { data, error } = await client.from('store_items').update({
+        name: itemData.name,
+        category_id: itemData.category_id || null,
+        description: itemData.description || '',
+        price: itemData.price,
+        image: itemData.image || '',
+        is_available: itemData.is_available !== false,
+        sku: itemData.sku || '',
+        updated_at: new Date().toISOString()
+      }).eq('id', itemData.id).select().single();
+      if (error || !data) return localDb.saveItem(itemData);
+      return data as StoreItem;
+    } else {
+      const { data, error } = await client.from('store_items').insert({
+        store_id: itemData.store_id,
+        category_id: itemData.category_id || null,
+        name: itemData.name,
+        description: itemData.description || '',
+        price: itemData.price,
+        image: itemData.image || '',
+        is_available: itemData.is_available !== false,
+        sku: itemData.sku || ''
+      }).select().single();
+      if (error || !data) return localDb.saveItem(itemData);
+      return data as StoreItem;
+    }
+  }
+
+  async deleteItem(id: string): Promise<void> {
+    const client = this.client;
+    if (!client) return localDb.deleteItem(id);
+    await client.from('store_items').delete().eq('id', id);
+  }
+
+  async importMenuItems(
+    storeId: string,
+    rows: { name: string; description?: string; category?: string; price: number; is_available?: boolean; image_url?: string; sku?: string }[]
+  ): Promise<{ added: number }> {
+    const client = this.client;
+    if (!client) return localDb.importMenuItems(storeId, rows);
+    let count = 0;
+    for (const r of rows) {
+      let catId: string | undefined = undefined;
+      if (r.category && r.category.trim()) {
+        const catName = r.category.trim();
+        const existingCat = await this.saveCategory(storeId, catName);
+        catId = existingCat.id;
+      }
+      await this.saveItem({
+        store_id: storeId,
+        category_id: catId,
+        name: r.name,
+        description: r.description || '',
+        price: Number(r.price) || 0,
+        is_available: r.is_available !== false,
+        image: r.image_url || '',
+        sku: r.sku || '',
+      });
+      count++;
+    }
+    return { added: count };
+  }
+
+  // --- MENU SNAPSHOTS ---
+  async createSnapshotFromStore(storeId: string): Promise<{ snapshot: MenuSnapshot; items: MenuSnapshotItem[] }> {
+    const client = this.client;
+    if (!client) return localDb.createSnapshotFromStore(storeId);
+    const store = await this.getStoreById(storeId);
+    const storeItems = await this.getItems(storeId);
+    const storeCategories = await this.getCategories(storeId);
+    const catNameMap = new Map<string, string>();
+    storeCategories.forEach((c) => catNameMap.set(c.id, c.name));
+
+    const { data: snapData, error: snapErr } = await client.from('menu_snapshots').insert({
+      store_id: storeId,
+      store_name: store ? store.name : 'Custom Store',
+      store_logo: store?.logo || '',
+      store_address: store?.address || ''
+    }).select().single();
+
+    if (snapErr || !snapData) return localDb.createSnapshotFromStore(storeId);
+
+    const snapshot = snapData as MenuSnapshot;
+    const itemsToInsert = storeItems.map((item) => ({
+      snapshot_id: snapshot.id,
+      category_name: (item.category_id && catNameMap.get(item.category_id)) || 'General',
+      name: item.name,
+      description: item.description || '',
+      price: item.price,
+      image: item.image || '',
+      is_available: item.is_available,
+      original_item_id: item.id
+    }));
+
+    const { data: itemsData, error: itemsErr } = await client.from('menu_snapshot_items').insert(itemsToInsert).select();
+    if (itemsErr || !itemsData) return localDb.createSnapshotFromStore(storeId);
+
+    return { snapshot, items: itemsData as MenuSnapshotItem[] };
+  }
+
+  async createCustomSnapshot(
+    storeName: string,
+    customItems: { name: string; description?: string; price: number; category_name?: string }[]
+  ): Promise<{ snapshot: MenuSnapshot; items: MenuSnapshotItem[] }> {
+    const client = this.client;
+    if (!client) return localDb.createCustomSnapshot(storeName, customItems);
+    const { data: snapData, error: snapErr } = await client.from('menu_snapshots').insert({
+      store_name: storeName
+    }).select().single();
+
+    if (snapErr || !snapData) return localDb.createCustomSnapshot(storeName, customItems);
+
+    const snapshot = snapData as MenuSnapshot;
+    const itemsToInsert = customItems.map((item) => ({
+      snapshot_id: snapshot.id,
+      category_name: item.category_name || 'General',
+      name: item.name,
+      description: item.description || '',
+      price: Number(item.price),
+      is_available: true
+    }));
+
+    const { data: itemsData, error: itemsErr } = await client.from('menu_snapshot_items').insert(itemsToInsert).select();
+    if (itemsErr || !itemsData) return localDb.createCustomSnapshot(storeName, customItems);
+
+    return { snapshot, items: itemsData as MenuSnapshotItem[] };
+  }
+
+  async getSnapshotById(snapshotId: string): Promise<MenuSnapshot | null> {
+    const client = this.client;
+    if (!client) return localDb.getSnapshotById(snapshotId);
+    const { data, error } = await client.from('menu_snapshots').select('*').eq('id', snapshotId).maybeSingle();
+    if (error || !data) return localDb.getSnapshotById(snapshotId);
+    return data as MenuSnapshot;
+  }
+
+  async getSnapshotItems(snapshotId: string): Promise<MenuSnapshotItem[]> {
+    const client = this.client;
+    if (!client) return localDb.getSnapshotItems(snapshotId);
+    const { data, error } = await client.from('menu_snapshot_items').select('*').eq('snapshot_id', snapshotId);
+    if (error || !data) return localDb.getSnapshotItems(snapshotId);
+    return data as MenuSnapshotItem[];
+  }
+
+  // --- SESSIONS ---
+  async getSessions(): Promise<OrderSession[]> {
+    const client = this.client;
+    if (!client) return localDb.getSessions();
+    const { data, error } = await client.from('order_sessions').select('*').order('created_at', { ascending: false });
+    if (error || !data) return localDb.getSessions();
+    return data as OrderSession[];
+  }
+
+  async getSessionByShareCode(shareCode: string): Promise<OrderSession | null> {
+    const client = this.client;
+    if (!client) return localDb.getSessionByShareCode(shareCode);
+    const { data, error } = await client.from('order_sessions').select('*').eq('share_code', shareCode).maybeSingle();
+    if (error || !data) return localDb.getSessionByShareCode(shareCode);
+    return data as OrderSession;
+  }
+
+  async getSessionById(id: string): Promise<OrderSession | null> {
+    const client = this.client;
+    if (!client) return localDb.getSessionById(id);
+    const { data, error } = await client.from('order_sessions').select('*').eq('id', id).maybeSingle();
+    if (error || !data) return localDb.getSessionById(id);
+    return data as OrderSession;
+  }
+
+  async createSession(sessionData: {
+    name: string;
+    store_id?: string;
+    snapshot_id: string;
+    deadline: string;
+    shipping_cost: number;
+    shipping_split_method: ShippingSplitMethod;
+    payment_notes?: string;
+    host_name?: string;
+  }): Promise<OrderSession> {
+    const client = this.client;
+    if (!client) return localDb.createSession(sessionData);
+
+    const shareCode = generateShareCode(6);
+    const { data, error } = await client.from('order_sessions').insert({
+      host_name: sessionData.host_name || 'Group Order Host',
+      store_id: sessionData.store_id || null,
+      menu_snapshot_id: sessionData.snapshot_id,
+      name: sessionData.name,
+      share_code: shareCode,
+      status: 'open',
+      deadline: sessionData.deadline,
+      shipping_cost: Number(sessionData.shipping_cost) || 0,
+      shipping_split_method: sessionData.shipping_split_method,
+      payment_notes: sessionData.payment_notes || ''
+    }).select().single();
+
+    if (error || !data) return localDb.createSession(sessionData);
+    return data as OrderSession;
+  }
+
+  async updateSession(id: string, updates: Partial<OrderSession>): Promise<OrderSession | null> {
+    const client = this.client;
+    if (!client) return localDb.updateSession(id, updates);
+    const { data, error } = await client.from('order_sessions').update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    }).eq('id', id).select().single();
+
+    if (error || !data) return localDb.updateSession(id, updates);
+
+    if (updates.shipping_cost !== undefined || updates.shipping_split_method !== undefined) {
+      await this.recalculateSessionOrderTotals(id);
+    }
+
+    return data as OrderSession;
+  }
+
+  async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string): Promise<OrderSession | null> {
+    const original = await this.getSessionById(sessionId);
+    if (!original) return null;
+    return this.createSession({
+      name: newName,
+      store_id: original.store_id,
+      snapshot_id: original.menu_snapshot_id,
+      deadline: newDeadlineISO,
+      shipping_cost: original.shipping_cost,
+      shipping_split_method: original.shipping_split_method,
+      payment_notes: original.payment_notes,
+      host_name: original.host_name
+    });
+  }
+
+  // --- ORDERS ---
+  async getOrdersForSession(sessionId: string): Promise<MemberOrder[]> {
+    const client = this.client;
+    if (!client) return localDb.getOrdersForSession(sessionId);
+    const { data: ordersData, error: ordersErr } = await client.from('member_orders').select('*').eq('session_id', sessionId);
+    if (ordersErr || !ordersData) return localDb.getOrdersForSession(sessionId);
+
+    const result: MemberOrder[] = [];
+    for (const ord of ordersData) {
+      const { data: itemsData } = await client.from('member_order_items').select('*').eq('order_id', ord.id);
+      result.push({
+        ...ord,
+        items: (itemsData || []) as MemberOrderItem[]
+      });
+    }
+
+    return result;
+  }
+
+  async getOrderForMember(sessionId: string, memberId: string): Promise<MemberOrder | null> {
+    const client = this.client;
+    if (!client) return localDb.getOrderForMember(sessionId, memberId);
+    const { data: ord, error } = await client.from('member_orders').select('*').eq('session_id', sessionId).eq('member_id', memberId).maybeSingle();
+    if (error || !ord) return localDb.getOrderForMember(sessionId, memberId);
+
+    const { data: itemsData } = await client.from('member_order_items').select('*').eq('order_id', ord.id);
+    return {
+      ...ord,
+      items: (itemsData || []) as MemberOrderItem[]
+    };
+  }
+
+  async submitMemberOrder(params: {
+    session_id: string;
+    member_id: string;
+    member_name: string;
+    items: { snapshot_item_id: string; quantity: number; notes?: string }[];
+  }): Promise<MemberOrder> {
+    const client = this.client;
+    if (!client) return localDb.submitMemberOrder(params);
+
+    const session = await this.getSessionById(params.session_id);
+    if (!session) throw new Error('Session not found');
+
+    const isPastDeadline = new Date(session.deadline).getTime() < Date.now();
+    if (session.status !== 'open' || isPastDeadline) {
+      throw new Error('Ordering is closed for this session.');
+    }
+
+    const snapshotItems = await this.getSnapshotItems(session.menu_snapshot_id);
+    const itemMap = new Map<string, MenuSnapshotItem>();
+    snapshotItems.forEach((si) => itemMap.set(si.id, si));
+
+    let foodSubtotal = 0;
+    const itemsToInsert: { snapshot_item_id: string; item_name: string; unit_price: number; quantity: number; notes: string; subtotal: number }[] = [];
+
+    for (const reqItem of params.items) {
+      if (reqItem.quantity <= 0) continue;
+      const snapItem = itemMap.get(reqItem.snapshot_item_id);
+      if (!snapItem) continue;
+      if (!snapItem.is_available) throw new Error(`Item "${snapItem.name}" is currently unavailable.`);
+
+      const itemSubtotal = snapItem.price * reqItem.quantity;
+      foodSubtotal += itemSubtotal;
+
+      itemsToInsert.push({
+        snapshot_item_id: snapItem.id,
+        item_name: snapItem.name,
+        unit_price: snapItem.price,
+        quantity: reqItem.quantity,
+        notes: reqItem.notes || '',
+        subtotal: itemSubtotal
+      });
+    }
+
+    const existingOrder = await this.getOrderForMember(params.session_id, params.member_id);
+    let orderId: string;
+
+    if (existingOrder) {
+      orderId = existingOrder.id;
+      await client.from('member_orders').update({
+        member_name: params.member_name,
+        food_subtotal: foodSubtotal,
+        grand_total: foodSubtotal,
+        status: 'submitted',
+        updated_at: new Date().toISOString()
+      }).eq('id', orderId);
+
+      await client.from('member_order_items').delete().eq('order_id', orderId);
+    } else {
+      const { data: newOrd, error: ordErr } = await client.from('member_orders').insert({
+        session_id: params.session_id,
+        member_id: params.member_id,
+        member_name: params.member_name,
+        food_subtotal: foodSubtotal,
+        shipping_share: 0,
+        grand_total: foodSubtotal,
+        payment_status: 'unpaid',
+        status: 'submitted'
+      }).select().single();
+
+      if (ordErr || !newOrd) return localDb.submitMemberOrder(params);
+      orderId = newOrd.id;
+    }
+
+    if (itemsToInsert.length > 0) {
+      await client.from('member_order_items').insert(
+        itemsToInsert.map((item) => ({ ...item, order_id: orderId }))
+      );
+    }
+
+    await this.recalculateSessionOrderTotals(params.session_id);
+    const finalOrder = await this.getOrderForMember(params.session_id, params.member_id);
+    return finalOrder || localDb.submitMemberOrder(params);
+  }
+
+  async updateMemberPaymentStatus(orderId: string, paymentStatus: MemberPaymentStatus): Promise<MemberOrder | null> {
+    const client = this.client;
+    if (!client) return localDb.updateMemberPaymentStatus(orderId, paymentStatus);
+    const { data, error } = await client.from('member_orders').update({
+      payment_status: paymentStatus,
+      updated_at: new Date().toISOString()
+    }).eq('id', orderId).select().single();
+
+    if (error || !data) return localDb.updateMemberPaymentStatus(orderId, paymentStatus);
+
+    const { data: itemsData } = await client.from('member_order_items').select('*').eq('order_id', orderId);
+    return {
+      ...data,
+      items: (itemsData || []) as MemberOrderItem[]
+    };
+  }
+
+  async deleteMemberOrder(orderId: string): Promise<void> {
+    const client = this.client;
+    if (!client) return localDb.deleteMemberOrder(orderId);
+    const { data: ord } = await client.from('member_orders').select('session_id').eq('id', orderId).maybeSingle();
+    await client.from('member_orders').delete().eq('id', orderId);
+    if (ord?.session_id) {
+      await this.recalculateSessionOrderTotals(ord.session_id);
+    }
+  }
+
+  private async recalculateSessionOrderTotals(sessionId: string) {
+    const client = this.client;
+    if (!client) return;
+    const session = await this.getSessionById(sessionId);
+    if (!session) return;
+
+    const { data: sessionOrders } = await client.from('member_orders').select('*').eq('session_id', sessionId).eq('status', 'submitted');
+    if (!sessionOrders || sessionOrders.length === 0) return;
+
+    const memberCount = sessionOrders.length;
+    const totalFoodSubtotal = sessionOrders.reduce((sum, o) => sum + Number(o.food_subtotal), 0);
+
+    for (const order of sessionOrders) {
+      let shippingShare = 0;
+      if (session.shipping_split_method === 'equal') {
+        shippingShare = Math.round(session.shipping_cost / memberCount);
+      } else if (session.shipping_split_method === 'proportional') {
+        if (totalFoodSubtotal > 0) {
+          shippingShare = Math.round((Number(order.food_subtotal) / totalFoodSubtotal) * session.shipping_cost);
+        }
+      }
+
+      const grandTotal = Number(order.food_subtotal) + shippingShare;
+      await client.from('member_orders').update({
+        shipping_share: shippingShare,
+        grand_total: grandTotal
+      }).eq('id', order.id);
+    }
+  }
+}
+
+const supabaseDb = new SupabaseDatabase();
+
+class DatabaseService {
+  private get activeDb() {
+    if (isSupabaseConfigured) {
+      return supabaseDb;
+    }
+    return localDb;
+  }
+
+  getStores() { return this.activeDb.getStores(); }
+  getStoreById(id: string) { return this.activeDb.getStoreById(id); }
+  saveStore(storeData: any) { return this.activeDb.saveStore(storeData); }
+  deleteStore(id: string) { return this.activeDb.deleteStore(id); }
+  getCategories(storeId: string) { return this.activeDb.getCategories(storeId); }
+  saveCategory(storeId: string, name: string) { return this.activeDb.saveCategory(storeId, name); }
+  deleteCategory(id: string) { return this.activeDb.deleteCategory(id); }
+  getItems(storeId: string) { return this.activeDb.getItems(storeId); }
+  saveItem(itemData: any) { return this.activeDb.saveItem(itemData); }
+  deleteItem(id: string) { return this.activeDb.deleteItem(id); }
+  importMenuItems(storeId: string, rows: any) { return this.activeDb.importMenuItems(storeId, rows); }
+  createSnapshotFromStore(storeId: string) { return this.activeDb.createSnapshotFromStore(storeId); }
+  createCustomSnapshot(storeName: string, customItems: any) { return this.activeDb.createCustomSnapshot(storeName, customItems); }
+  getSnapshotById(snapshotId: string) { return this.activeDb.getSnapshotById(snapshotId); }
+  getSnapshotItems(snapshotId: string) { return this.activeDb.getSnapshotItems(snapshotId); }
+  getSessions() { return this.activeDb.getSessions(); }
+  getSessionByShareCode(shareCode: string) { return this.activeDb.getSessionByShareCode(shareCode); }
+  getSessionById(id: string) { return this.activeDb.getSessionById(id); }
+  createSession(sessionData: any) { return this.activeDb.createSession(sessionData); }
+  updateSession(id: string, updates: any) { return this.activeDb.updateSession(id, updates); }
+  duplicateSession(sessionId: string, newName: string, newDeadlineISO: string) { return this.activeDb.duplicateSession(sessionId, newName, newDeadlineISO); }
+  getOrdersForSession(sessionId: string) { return this.activeDb.getOrdersForSession(sessionId); }
+  getOrderForMember(sessionId: string, memberId: string) { return this.activeDb.getOrderForMember(sessionId, memberId); }
+  submitMemberOrder(params: any) { return this.activeDb.submitMemberOrder(params); }
+  updateMemberPaymentStatus(orderId: string, paymentStatus: MemberPaymentStatus) { return this.activeDb.updateMemberPaymentStatus(orderId, paymentStatus); }
+  deleteMemberOrder(orderId: string) { return this.activeDb.deleteMemberOrder(orderId); }
+}
+
+export const db = new DatabaseService();
+
