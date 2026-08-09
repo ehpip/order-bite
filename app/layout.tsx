@@ -1,25 +1,31 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import MantineWrapper from '@/components/mantine-wrapper';
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import MantineWrapper from "@/components/mantine-wrapper";
+import { Analytics } from "@vercel/analytics/next";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Group Food Ordering App',
-  description: 'Create group food orders in under 1 minute, share one link, and track payments effortlessly.',
+  title: "Group Food Ordering App",
+  description:
+    "Create group food orders in under 1 minute, share one link, and track payments effortlessly.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body suppressHydrationWarning className={`${inter.className} bg-slate-50 text-slate-900 antialiased min-h-screen`}>
-        <MantineWrapper>
-          {children}
-        </MantineWrapper>
+      <Analytics />
+      <body
+        suppressHydrationWarning
+        className={`${inter.className} bg-slate-50 text-slate-900 antialiased min-h-screen`}
+      >
+        <MantineWrapper>{children}</MantineWrapper>
       </body>
     </html>
   );
 }
-
-
