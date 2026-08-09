@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, Store as StoreIcon, Check } from 'lucide-react';
+import { ArrowLeft, Check, Lock, Sparkles } from 'lucide-react';
 import { db } from '@/lib/storage/db-service';
+import { useAuth, ADMIN_EMAIL } from '@/lib/auth-context';
 
 const storeSchema = z.object({
   name: z.string().min(2, 'Store name must be at least 2 characters'),
@@ -24,6 +25,7 @@ type StoreFormValues = z.infer<typeof storeSchema>;
 
 export default function NewStorePage() {
   const router = useRouter();
+  const { isAdmin, setShowAuthModal } = useAuth();
   const [submitting, setSubmitting] = useState(false);
 
   const {
@@ -38,6 +40,11 @@ export default function NewStorePage() {
   });
 
   const onSubmit = async (data: StoreFormValues) => {
+    if (!isAdmin) {
+      alert(`Only Admin (${ADMIN_EMAIL}) can save new stores.`);
+      setShowAuthModal(true);
+      return;
+    }
     try {
       setSubmitting(true);
       const newStore = await db.saveStore(data);
@@ -47,6 +54,43 @@ export default function NewStorePage() {
       setSubmitting(false);
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <div className="max-w-xl mx-auto my-12 space-y-6 text-center">
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+          <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+            <Lock className="w-7 h-7" />
+          </div>
+          <div>
+            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider inline-block mb-2">
+              Admin Access Required
+            </span>
+            <h2 className="text-xl font-bold text-slate-900">Store Creation Restricted</h2>
+            <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed max-w-md mx-auto">
+              Creating new stores in the database is strictly reserved for the administrator account (<strong className="font-mono text-orange-700">{ADMIN_EMAIL}</strong>).
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition-colors shadow-xs cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              Sign in with Google Admin
+            </button>
+            <Link
+              href="/dashboard/stores"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2.5 rounded-xl text-xs transition-colors"
+            >
+              Back to Food Stores
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -97,7 +141,6 @@ export default function NewStorePage() {
               className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600"
             />
           </div>
-
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-1">Cover Image URL</label>
             <input

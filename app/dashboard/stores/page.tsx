@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Store as StoreIcon, PlusCircle, Search, Filter, Edit3, Trash2, ArrowRight } from 'lucide-react';
+import { Store as StoreIcon, PlusCircle, Search, Filter, Trash2, ArrowRight, ShieldCheck, Lock } from 'lucide-react';
 import { db } from '@/lib/storage/db-service';
 import { Store } from '@/lib/types';
+import { useAuth, ADMIN_EMAIL } from '@/lib/auth-context';
 
 export default function StoresPage() {
+  const { user, isAdmin, setShowAuthModal } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
@@ -21,6 +23,11 @@ export default function StoresPage() {
   }
 
   async function handleDeleteStore(id: string, name: string) {
+    if (!isAdmin) {
+      alert(`Store database management is restricted to Admin (${ADMIN_EMAIL}).`);
+      setShowAuthModal(true);
+      return;
+    }
     if (confirm(`Are you sure you want to delete or archive store "${name}"?`)) {
       await db.deleteStore(id);
       loadStores();
@@ -36,6 +43,35 @@ export default function StoresPage() {
 
   return (
     <div className="space-y-6">
+      {/* Admin Privilege Banner */}
+      {!isAdmin ? (
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs sm:text-sm text-amber-900">
+          <div className="flex items-start gap-3">
+            <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <span className="font-bold block sm:inline">Store Database Management is Restricted</span>{' '}
+              <span>Only administrator (<strong className="font-mono text-amber-950">{ADMIN_EMAIL}</strong>) can create, edit, or delete store menus.</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowAuthModal(true)}
+            className="shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs transition-colors shadow-xs"
+          >
+            Sign in as Admin
+          </button>
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl flex items-center justify-between text-xs sm:text-sm text-emerald-900">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>Authenticated as <strong>{user?.email}</strong> (Store Admin)</span>
+          </div>
+          <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+            Admin Access Active
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Food Stores</h1>
@@ -43,13 +79,27 @@ export default function StoresPage() {
             Reusable restaurant and menu database for group food ordering sessions.
           </p>
         </div>
-        <Link
-          href="/dashboard/stores/new"
-          className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-colors shadow-xs"
-        >
-          <PlusCircle className="w-4 h-4" />
-          Create New Store
-        </Link>
+
+        {isAdmin ? (
+          <Link
+            href="/dashboard/stores/new"
+            className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-colors shadow-xs"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Create New Store
+          </Link>
+        ) : (
+          <button
+            onClick={() => {
+              alert(`Only Admin (${ADMIN_EMAIL}) can create new stores.`);
+              setShowAuthModal(true);
+            }}
+            className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-colors border border-slate-200"
+          >
+            <Lock className="w-4 h-4 text-slate-500" />
+            Create New Store (Admin Only)
+          </button>
+        )}
       </div>
 
       {/* Search & Filters */}
@@ -126,15 +176,18 @@ export default function StoresPage() {
                   href={`/dashboard/stores/${store.id}`}
                   className="flex-1 inline-flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold py-2 rounded-xl transition-colors shadow-2xs"
                 >
-                  Manage Menu <ArrowRight className="w-3.5 h-3.5" />
+                  View Menu <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
-                <button
-                  onClick={() => handleDeleteStore(store.id, store.name)}
-                  className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
-                  title="Delete Store"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+
+                {isAdmin && (
+                  <button
+                    onClick={() => handleDeleteStore(store.id, store.name)}
+                    className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                    title="Delete Store"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -143,3 +196,4 @@ export default function StoresPage() {
     </div>
   );
 }
+

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import MantineWrapper from '@/components/mantine-wrapper';
+import { AuthProvider } from '@/lib/auth-context';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -14,9 +15,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body suppressHydrationWarning className={`${inter.className} bg-slate-50 text-slate-900 antialiased min-h-screen`}>
-        <MantineWrapper>
-          {children}
-        </MantineWrapper>
+        <AuthProvider>
+          <MantineWrapper>
+            {children}
+          </MantineWrapper>
+        </AuthProvider>
       </body>
     </html>
   );
