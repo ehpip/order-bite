@@ -2,14 +2,16 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { PlusCircle, ListOrdered, Store as StoreIcon, Users, DollarSign, ArrowRight, Share2, AlertCircle } from 'lucide-react';
+import { PlusCircle, ListOrdered, Store as StoreIcon, Users, DollarSign, ArrowRight, Share2, AlertCircle, LogIn } from 'lucide-react';
 import { db } from '@/lib/storage/db-service';
 import { OrderSession, Store, MemberOrder } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import CountdownBadge from '@/components/ui/countdown-badge';
 import ShareQRDialog from '@/components/share-qr-dialog';
+import { useAuth } from '@/lib/auth-context';
 
 export default function DashboardPage() {
+  const { user, hostIdentifier, isHostOwner, loginWithGoogle, isLoading } = useAuth();
   const [sessions, setSessions] = useState<OrderSession[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [allOrders, setAllOrders] = useState<MemberOrder[]>([]);
@@ -17,7 +19,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadData() {
-      const sessList = await db.getSessions();
+      // Fetch sessions for this host/device context
+      const sessList = await db.getSessions(hostIdentifier);
       setSessions(sessList);
 
       const storeList = await db.getStores();
@@ -30,8 +33,10 @@ export default function DashboardPage() {
       }
       setAllOrders(ordersList);
     }
-    loadData();
-  }, []);
+    if (!isLoading) {
+      loadData();
+    }
+  }, [user, hostIdentifier, isLoading]);
 
   const activeSessionsCount = sessions.filter((s) => s.status === 'open').length;
   const unpaidOrdersCount = allOrders.filter((o) => o.payment_status === 'unpaid').length;
@@ -49,13 +54,6 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <Link
-            href="/dashboard/stores/new"
-            className="inline-flex items-center gap-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-colors shadow-2xs"
-          >
-            <StoreIcon className="w-4 h-4 text-orange-600" />
-            + New Store
-          </Link>
-          <Link
             href="/dashboard/orders/new"
             className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-colors shadow-xs"
           >
@@ -64,6 +62,22 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Unauthenticated Host Notice */}
+      {!user && !isLoading && (
+        <div className="bg-orange-50 border border-orange-200 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-orange-900 shadow-2xs">
+          <div>
+            <span className="font-bold block text-sm text-orange-950">Host Authentication Recommended</span>
+            <span className="text-orange-800">Sign in with Google so your group order sessions are securely bound to your host account.</span>
+          </div>
+          <button
+            onClick={() => loginWithGoogle()}
+            className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition-colors shrink-0 cursor-pointer shadow-xs"
+          >
+            <LogIn className="w-4 h-4" /> Sign In with Google
+          </button>
+        </div>
+      )}
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -131,40 +145,45 @@ export default function DashboardPage() {
           <div className="p-8 text-center text-xs text-slate-500">No sessions created yet.</div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {sessions.slice(0, 5).map((session) => (
-              <div
-                key={session.id}
-                className="p-4 sm:p-5 hover:bg-slate-50/80 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 text-sm sm:text-base">{session.name}</span>
-                    <CountdownBadge deadlineISO={session.deadline} isClosed={session.status === 'closed'} />
+            {sessions.slice(0, 5).map((session) => {
+              const isOwner = isHostOwner(session);
+              return (
+                <div
+                  key={session.id}
+                  className="p-4 sm:p-5 hover:bg-slate-50/80 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-900 text-sm sm:text-base">{session.name}</span>
+                      <CountdownBadge deadlineISO={session.deadline} isClosed={session.status === 'closed'} />
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span>Deadline: {formatDate(session.deadline)}</span>
+                      <span>•</span>
+                      <span>Shipping: {formatCurrency(session.shipping_cost)} ({session.shipping_split_method})</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span>Deadline: {formatDate(session.deadline)}</span>
-                    <span>•</span>
-                    <span>Shipping: {formatCurrency(session.shipping_cost)} ({session.shipping_split_method})</span>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSelectedShareSession(session)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    <Share2 className="w-3.5 h-3.5 text-orange-600" />
-                    Share Link
-                  </button>
-                  <Link
-                    href={`/dashboard/orders/${session.id}`}
-                    className="inline-flex items-center gap-1 px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold transition-colors"
-                  >
-                    Manage Order
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedShareSession(session)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-orange-600" />
+                      Share Link
+                    </button>
+                    {isOwner && (
+                      <Link
+                        href={`/dashboard/orders/${session.id}`}
+                        className="inline-flex items-center gap-1 px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold transition-colors"
+                      >
+                        Manage Order
+                      </Link>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -174,7 +193,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-base font-bold text-slate-900">Food Stores Database</h2>
-            <p className="text-xs text-slate-500">Manage stores, categories, and import CSV menus</p>
+            <p className="text-xs text-slate-500">View available stores, menus, and item catalogs for group orders</p>
           </div>
           <Link
             href="/dashboard/stores"
@@ -208,7 +227,7 @@ export default function DashboardPage() {
                 href={`/dashboard/stores/${store.id}`}
                 className="block text-center text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 py-1.5 rounded-lg transition-colors border border-orange-200"
               >
-                Manage Menu Items
+                View Store Menu
               </Link>
             </div>
           ))}

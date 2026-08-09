@@ -333,8 +333,12 @@ class LocalDatabase {
   }
 
   // --- SESSIONS ---
-  async getSessions(): Promise<OrderSession[]> {
-    return [...this.sessions].sort(
+  async getSessions(hostId?: string): Promise<OrderSession[]> {
+    let list = [...this.sessions];
+    if (hostId) {
+      list = list.filter((s) => s.host_id === hostId);
+    }
+    return list.sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }
@@ -356,6 +360,7 @@ class LocalDatabase {
     shipping_split_method: ShippingSplitMethod;
     payment_notes?: string;
     host_name?: string;
+    host_id?: string;
   }): Promise<OrderSession> {
     let shareCode = generateShareCode(6);
     while (this.sessions.some((s) => s.share_code === shareCode)) {
@@ -365,7 +370,7 @@ class LocalDatabase {
     const now = new Date().toISOString();
     const newSession: OrderSession = {
       id: `session-${Date.now()}-${generateShareCode(4)}`,
-      host_id: 'host-user',
+      host_id: sessionData.host_id || 'host-user',
       host_name: sessionData.host_name || 'Group Order Host',
       store_id: sessionData.store_id,
       menu_snapshot_id: sessionData.snapshot_id,
@@ -405,7 +410,7 @@ class LocalDatabase {
     return updated;
   }
 
-  async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string): Promise<OrderSession | null> {
+  async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string): Promise<OrderSession | null> {
     const original = await this.getSessionById(sessionId);
     if (!original) return null;
 
@@ -418,6 +423,7 @@ class LocalDatabase {
       shipping_split_method: original.shipping_split_method,
       payment_notes: original.payment_notes,
       host_name: original.host_name,
+      host_id: hostId || original.host_id,
     });
   }
 
@@ -900,11 +906,15 @@ class SupabaseDatabase {
   }
 
   // --- SESSIONS ---
-  async getSessions(): Promise<OrderSession[]> {
+  async getSessions(hostId?: string): Promise<OrderSession[]> {
     const client = this.client;
-    if (!client) return localDb.getSessions();
-    const { data, error } = await client.from('order_sessions').select('*').order('created_at', { ascending: false });
-    if (error || !data) return localDb.getSessions();
+    if (!client) return localDb.getSessions(hostId);
+    let query = client.from('order_sessions').select('*');
+    if (hostId) {
+      query = query.eq('host_id', hostId);
+    }
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error || !data) return localDb.getSessions(hostId);
     return data as OrderSession[];
   }
 
@@ -938,12 +948,14 @@ class SupabaseDatabase {
     shipping_split_method: ShippingSplitMethod;
     payment_notes?: string;
     host_name?: string;
+    host_id?: string;
   }): Promise<OrderSession> {
     const client = this.client;
     if (!client) return localDb.createSession(sessionData);
 
     const shareCode = generateShareCode(6);
     const { data, error } = await client.from('order_sessions').insert({
+      host_id: sessionData.host_id || 'host-user',
       host_name: sessionData.host_name || 'Group Order Host',
       store_id: toValidUuidOrNull(sessionData.store_id),
       menu_snapshot_id: sessionData.snapshot_id,
@@ -980,7 +992,7 @@ class SupabaseDatabase {
     return data as OrderSession;
   }
 
-  async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string): Promise<OrderSession | null> {
+  async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string): Promise<OrderSession | null> {
     const original = await this.getSessionById(sessionId);
     if (!original) return null;
     return this.createSession({
@@ -991,7 +1003,8 @@ class SupabaseDatabase {
       shipping_cost: original.shipping_cost,
       shipping_split_method: original.shipping_split_method,
       payment_notes: original.payment_notes,
-      host_name: original.host_name
+      host_name: original.host_name,
+      host_id: hostId || original.host_id,
     });
   }
 
@@ -1194,12 +1207,12 @@ class DatabaseService {
   createCustomSnapshot(storeName: string, customItems: any) { return this.activeDb.createCustomSnapshot(storeName, customItems); }
   getSnapshotById(snapshotId: string) { return this.activeDb.getSnapshotById(snapshotId); }
   getSnapshotItems(snapshotId: string) { return this.activeDb.getSnapshotItems(snapshotId); }
-  getSessions() { return this.activeDb.getSessions(); }
+  getSessions(hostId?: string) { return this.activeDb.getSessions(hostId); }
   getSessionByShareCode(shareCode: string) { return this.activeDb.getSessionByShareCode(shareCode); }
   getSessionById(id: string) { return this.activeDb.getSessionById(id); }
   createSession(sessionData: any) { return this.activeDb.createSession(sessionData); }
   updateSession(id: string, updates: any) { return this.activeDb.updateSession(id, updates); }
-  duplicateSession(sessionId: string, newName: string, newDeadlineISO: string) { return this.activeDb.duplicateSession(sessionId, newName, newDeadlineISO); }
+  duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string) { return this.activeDb.duplicateSession(sessionId, newName, newDeadlineISO, hostId); }
   getOrdersForSession(sessionId: string) { return this.activeDb.getOrdersForSession(sessionId); }
   getOrderForMember(sessionId: string, memberId: string) { return this.activeDb.getOrderForMember(sessionId, memberId); }
   submitMemberOrder(params: any) { return this.activeDb.submitMemberOrder(params); }

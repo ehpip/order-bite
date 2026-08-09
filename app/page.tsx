@@ -8,8 +8,10 @@ import { db } from '@/lib/storage/db-service';
 import { OrderSession, Store } from '@/lib/types';
 import { formatCurrency } from '@/lib/formatters';
 import CountdownBadge from '@/components/ui/countdown-badge';
+import { useAuth } from '@/lib/auth-context';
 
 export default function HomePage() {
+  const { isHostOwner } = useAuth();
   const [activeSessions, setActiveSessions] = useState<OrderSession[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
 
@@ -152,12 +154,14 @@ export default function HomePage() {
                   >
                     Join as Member
                   </Link>
-                  <Link
-                    href={`/dashboard/orders/${session.id}`}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium text-xs py-2.5 px-3 rounded-xl text-center transition-colors"
-                  >
-                    Manage
-                  </Link>
+                  {isHostOwner(session) && (
+                    <Link
+                      href={`/dashboard/orders/${session.id}`}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium text-xs py-2.5 px-3 rounded-xl text-center transition-colors"
+                    >
+                      Manage
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}

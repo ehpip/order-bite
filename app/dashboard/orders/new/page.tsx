@@ -15,9 +15,11 @@ import {
 } from "lucide-react";
 import { db } from "@/lib/storage/db-service";
 import { Store, ShippingSplitMethod } from "@/lib/types";
+import { useAuth } from "@/lib/auth-context";
 
 export default function NewOrderSessionPage() {
   const router = useRouter();
+  const { user, hostIdentifier } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -38,9 +40,17 @@ export default function NewOrderSessionPage() {
   const [shippingSplitMethod, setShippingSplitMethod] =
     useState<ShippingSplitMethod>("equal");
   const [paymentNotes, setPaymentNotes] = useState(
-    "Transfer to BCA 1234567890 a.n. Host or GoPay 0812345678",
+    "Transfer to BCA 8830129482 a.n. Host or GoPay 0812345678",
   );
-  const [hostName, setHostName] = useState("Afif (IT Team)");
+  const [hostName, setHostName] = useState("Host");
+
+  useEffect(() => {
+    if (user?.name) {
+      setHostName(user.name);
+    } else if (user?.email) {
+      setHostName(user.email.split("@")[0]);
+    }
+  }, [user]);
 
   useEffect(() => {
     async function fetchStores() {
@@ -120,6 +130,7 @@ export default function NewOrderSessionPage() {
         shipping_split_method: shippingSplitMethod,
         payment_notes: paymentNotes,
         host_name: hostName,
+        host_id: hostIdentifier,
       });
 
       // Redirect directly to host management dashboard with share popup trigger

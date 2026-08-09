@@ -5,12 +5,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Utensils, Store, PlusCircle, LayoutDashboard, ListOrdered, Menu, X, ShieldCheck, LogOut, User } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import AuthModal from '@/components/auth-modal';
 
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, isAdmin, loginWithGoogle, logout, setShowAuthModal } = useAuth();
+  const { user, isAdmin, loginWithGoogle, logout } = useAuth();
 
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -25,7 +24,6 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-xs">
-      <AuthModal />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Brand logo */}
@@ -111,8 +109,8 @@ export default function Navbar() {
               </div>
             ) : (
               <button
-                onClick={() => setShowAuthModal(true)}
-                className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors shadow-xs"
+                onClick={() => loginWithGoogle()}
+                className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors shadow-xs cursor-pointer"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -129,8 +127,8 @@ export default function Navbar() {
           <div className="flex items-center gap-2 md:hidden">
             {!user && (
               <button
-                onClick={() => setShowAuthModal(true)}
-                className="text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-1.5 rounded-lg"
+                onClick={() => loginWithGoogle()}
+                className="text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-1.5 rounded-lg cursor-pointer"
               >
                 Login
               </button>
@@ -205,10 +203,10 @@ export default function Navbar() {
             {!user && (
               <button
                 onClick={() => {
-                  setShowAuthModal(true);
+                  loginWithGoogle();
                   setMobileOpen(false);
                 }}
-                className="flex items-center justify-center gap-2 w-full bg-slate-900 text-white font-medium py-2.5 rounded-lg shadow-xs"
+                className="flex items-center justify-center gap-2 w-full bg-slate-900 text-white font-medium py-2.5 rounded-lg shadow-xs cursor-pointer"
               >
                 Sign in with Google
               </button>
