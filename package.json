@@ -1,5 +1,5 @@
 {
-  "name": "order-bite",
+  "name": "ai-studio-applet",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -15,7 +15,6 @@
     "@mantine/core": "^9.5.1",
     "@mantine/hooks": "^9.5.1",
     "@supabase/supabase-js": "^2.112.2",
-    "@vercel/analytics": "^2.0.1",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

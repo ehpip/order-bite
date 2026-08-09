@@ -130,21 +130,16 @@ ALTER TABLE public.order_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.member_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.member_order_items ENABLE ROW LEVEL SECURITY;
 
--- Allow public read access for store menus, snapshots, open sessions, and member orders
-CREATE POLICY "Public read active stores" ON public.stores FOR SELECT USING (status = 'active');
-CREATE POLICY "Public read store categories" ON public.store_categories FOR SELECT USING (TRUE);
-CREATE POLICY "Public read store items" ON public.store_items FOR SELECT USING (TRUE);
-CREATE POLICY "Public read snapshots" ON public.menu_snapshots FOR SELECT USING (TRUE);
-CREATE POLICY "Public read snapshot items" ON public.menu_snapshot_items FOR SELECT USING (TRUE);
-CREATE POLICY "Public read sessions by share code" ON public.order_sessions FOR SELECT USING (TRUE);
-CREATE POLICY "Public read member orders" ON public.member_orders FOR SELECT USING (TRUE);
-CREATE POLICY "Public read member order items" ON public.member_order_items FOR SELECT USING (TRUE);
+-- Allow public (anon & auth) full access to stores, categories, items
+CREATE POLICY "Public stores access" ON public.stores FOR ALL USING (TRUE) WITH CHECK (TRUE);
+CREATE POLICY "Public categories access" ON public.store_categories FOR ALL USING (TRUE) WITH CHECK (TRUE);
+CREATE POLICY "Public items access" ON public.store_items FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
--- Public members can insert/update their own orders via session share code
-CREATE POLICY "Public insert member orders" ON public.member_orders FOR INSERT WITH CHECK (TRUE);
-CREATE POLICY "Public update member orders" ON public.member_orders FOR UPDATE USING (TRUE);
-CREATE POLICY "Public insert order items" ON public.member_order_items FOR INSERT WITH CHECK (TRUE);
+-- Allow public full access to menu snapshots and snapshot items
+CREATE POLICY "Public snapshots access" ON public.menu_snapshots FOR ALL USING (TRUE) WITH CHECK (TRUE);
+CREATE POLICY "Public snapshot items access" ON public.menu_snapshot_items FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
--- Authenticated hosts/admins can create & edit stores and sessions
-CREATE POLICY "Auth host create stores" ON public.stores FOR ALL TO authenticated USING (TRUE);
-CREATE POLICY "Auth host create sessions" ON public.order_sessions FOR ALL TO authenticated USING (TRUE);
+-- Allow public full access to order sessions, member orders, and order items
+CREATE POLICY "Public sessions access" ON public.order_sessions FOR ALL USING (TRUE) WITH CHECK (TRUE);
+CREATE POLICY "Public member orders access" ON public.member_orders FOR ALL USING (TRUE) WITH CHECK (TRUE);
+CREATE POLICY "Public member order items access" ON public.member_order_items FOR ALL USING (TRUE) WITH CHECK (TRUE);

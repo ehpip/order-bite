@@ -15,6 +15,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
   const [snapshot, setSnapshot] = useState<MenuSnapshot | null>(null);
   const [snapshotItems, setSnapshotItems] = useState<MenuSnapshotItem[]>([]);
   const [existingOrder, setExistingOrder] = useState<MemberOrder | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   // Member Identity
   const [memberName, setMemberName] = useState<string>('');
@@ -38,7 +39,10 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
 
   async function loadData() {
     const sess = await db.getSessionByShareCode(shareCode);
-    if (!sess) return;
+    if (!sess) {
+      setNotFound(true);
+      return;
+    }
     setSession(sess);
 
     const snap = await db.getSnapshotById(sess.menu_snapshot_id);
@@ -152,10 +156,31 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
     loadData();
   };
 
+  if (notFound) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm max-w-md w-full text-center space-y-4">
+          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto font-bold text-lg">
+            !
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">Group Order Session Not Found</h2>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            We couldn't find a group order session with share code <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-slate-800 font-semibold">{shareCode}</code>.
+            Please verify the link with the group order host or create a new session.
+          </p>
+          <Link href="/" className="inline-block bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition-colors">
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 text-slate-500 text-sm">
-        Loading group order session...
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 text-slate-500 text-sm flex-col gap-3">
+        <div className="w-7 h-7 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
+        <span className="font-medium text-slate-600">Loading group order session...</span>
       </div>
     );
   }

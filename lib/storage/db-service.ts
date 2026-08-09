@@ -565,6 +565,12 @@ class LocalDatabase {
   }
 }
 
+function toValidUuidOrNull(str?: string | null): string | null {
+  if (!str) return null;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str) ? str : null;
+}
+
 const localDb = new LocalDatabase();
 
 class SupabaseDatabase {
@@ -581,13 +587,28 @@ class SupabaseDatabase {
       console.warn('Supabase getStores fallback to local:', error);
       return localDb.getStores();
     }
+    if (data.length === 0) {
+      const localStores = await localDb.getStores();
+      for (const ls of localStores) {
+        await this.saveStore(ls);
+      }
+      const { data: seeded } = await client.from('stores').select('*').order('created_at', { ascending: false });
+      if (seeded && seeded.length > 0) {
+        return seeded as Store[];
+      }
+      return localStores;
+    }
     return data as Store[];
   }
 
   async getStoreById(id: string): Promise<Store | null> {
     const client = this.client;
     if (!client) return localDb.getStoreById(id);
-    const { data, error } = await client.from('stores').select('*').eq('id', id).maybeSingle();
+    const validUuid = toValidUuidOrNull(id);
+    if (!validUuid) {
+      return localDb.getStoreById(id);
+    }
+    const { data, error } = await client.from('stores').select('*').eq('id', validUuid).maybeSingle();
     if (error || !data) return localDb.getStoreById(id);
     return data as Store;
   }
@@ -595,7 +616,8 @@ class SupabaseDatabase {
   async saveStore(storeData: Partial<Store> & { name: string }): Promise<Store> {
     const client = this.client;
     if (!client) return localDb.saveStore(storeData);
-    if (storeData.id) {
+    const validUuid = toValidUuidOrNull(storeData.id);
+    if (validUuid) {
       const { data, error } = await client.from('stores').update({
         name: storeData.name,
         description: storeData.description || '',
@@ -606,8 +628,11 @@ class SupabaseDatabase {
         website: storeData.website || '',
         status: storeData.status || 'active',
         updated_at: new Date().toISOString()
-      }).eq('id', storeData.id).select().single();
-      if (error || !data) return localDb.saveStore(storeData);
+      }).eq('id', validUuid).select().single();
+      if (error || !data) {
+        console.error('Supabase update store error:', error);
+        return localDb.saveStore(storeData);
+      }
       return data as Store;
     } else {
       const { data, error } = await client.from('stores').insert({
@@ -620,7 +645,10 @@ class SupabaseDatabase {
         website: storeData.website || '',
         status: storeData.status || 'active'
       }).select().single();
-      if (error || !data) return localDb.saveStore(storeData);
+      if (error || !data) {
+        console.error('Supabase insert store error:', error);
+        return localDb.saveStore(storeData);
+      }
       return data as Store;
     }
   }
@@ -628,14 +656,20 @@ class SupabaseDatabase {
   async deleteStore(id: string): Promise<void> {
     const client = this.client;
     if (!client) return localDb.deleteStore(id);
-    await client.from('stores').delete().eq('id', id);
+    const validUuid = toValidUuidOrNull(id);
+    if (validUuid) {
+      await client.from('stores').delete().eq('id', validUuid);
+    }
+    await localDb.deleteStore(id);
   }
 
   // --- CATEGORIES ---
   async getCategories(storeId: string): Promise<StoreCategory[]> {
     const client = this.client;
     if (!client) return localDb.getCategories(storeId);
-    const { data, error } = await client.from('store_categories').select('*').eq('store_id', storeId).order('sort_order', { ascending: true });
+    const validUuid = toValidUuidOrNull(storeId);
+    if (!validUuid) return localDb.getCategories(storeId);
+    const { data, error } = await client.from('store_categories').select('*').eq('store_id', validUuid).order('sort_order', { ascending: true });
     if (error || !data) return localDb.getCategories(storeId);
     return data as StoreCategory[];
   }
@@ -643,26 +677,37 @@ class SupabaseDatabase {
   async saveCategory(storeId: string, name: string): Promise<StoreCategory> {
     const client = this.client;
     if (!client) return localDb.saveCategory(storeId, name);
+    const validUuid = toValidUuidOrNull(storeId);
+    if (!validUuid) return localDb.saveCategory(storeId, name);
     const { data, error } = await client.from('store_categories').insert({
-      store_id: storeId,
+      store_id: validUuid,
       name,
       sort_order: 1
     }).select().single();
-    if (error || !data) return localDb.saveCategory(storeId, name);
+    if (error || !data) {
+      console.error('Supabase saveCategory error:', error);
+      return localDb.saveCategory(storeId, name);
+    }
     return data as StoreCategory;
   }
 
   async deleteCategory(id: string): Promise<void> {
     const client = this.client;
     if (!client) return localDb.deleteCategory(id);
-    await client.from('store_categories').delete().eq('id', id);
+    const validUuid = toValidUuidOrNull(id);
+    if (validUuid) {
+      await client.from('store_categories').delete().eq('id', validUuid);
+    }
+    await localDb.deleteCategory(id);
   }
 
   // --- ITEMS ---
   async getItems(storeId: string): Promise<StoreItem[]> {
     const client = this.client;
     if (!client) return localDb.getItems(storeId);
-    const { data, error } = await client.from('store_items').select('*').eq('store_id', storeId).order('sort_order', { ascending: true });
+    const validUuid = toValidUuidOrNull(storeId);
+    if (!validUuid) return localDb.getItems(storeId);
+    const { data, error } = await client.from('store_items').select('*').eq('store_id', validUuid).order('sort_order', { ascending: true });
     if (error || !data) return localDb.getItems(storeId);
     return data as StoreItem[];
   }
@@ -670,23 +715,31 @@ class SupabaseDatabase {
   async saveItem(itemData: Partial<StoreItem> & { store_id: string; name: string; price: number }): Promise<StoreItem> {
     const client = this.client;
     if (!client) return localDb.saveItem(itemData);
-    if (itemData.id) {
+    const validStoreUuid = toValidUuidOrNull(itemData.store_id);
+    const validCatUuid = toValidUuidOrNull(itemData.category_id);
+    const validItemUuid = toValidUuidOrNull(itemData.id);
+
+    if (validItemUuid) {
       const { data, error } = await client.from('store_items').update({
         name: itemData.name,
-        category_id: itemData.category_id || null,
+        category_id: validCatUuid,
         description: itemData.description || '',
         price: itemData.price,
         image: itemData.image || '',
         is_available: itemData.is_available !== false,
         sku: itemData.sku || '',
         updated_at: new Date().toISOString()
-      }).eq('id', itemData.id).select().single();
-      if (error || !data) return localDb.saveItem(itemData);
+      }).eq('id', validItemUuid).select().single();
+      if (error || !data) {
+        console.error('Supabase update item error:', error);
+        return localDb.saveItem(itemData);
+      }
       return data as StoreItem;
     } else {
+      if (!validStoreUuid) return localDb.saveItem(itemData);
       const { data, error } = await client.from('store_items').insert({
-        store_id: itemData.store_id,
-        category_id: itemData.category_id || null,
+        store_id: validStoreUuid,
+        category_id: validCatUuid,
         name: itemData.name,
         description: itemData.description || '',
         price: itemData.price,
@@ -694,7 +747,10 @@ class SupabaseDatabase {
         is_available: itemData.is_available !== false,
         sku: itemData.sku || ''
       }).select().single();
-      if (error || !data) return localDb.saveItem(itemData);
+      if (error || !data) {
+        console.error('Supabase insert item error:', error);
+        return localDb.saveItem(itemData);
+      }
       return data as StoreItem;
     }
   }
@@ -702,7 +758,11 @@ class SupabaseDatabase {
   async deleteItem(id: string): Promise<void> {
     const client = this.client;
     if (!client) return localDb.deleteItem(id);
-    await client.from('store_items').delete().eq('id', id);
+    const validUuid = toValidUuidOrNull(id);
+    if (validUuid) {
+      await client.from('store_items').delete().eq('id', validUuid);
+    }
+    await localDb.deleteItem(id);
   }
 
   async importMenuItems(
@@ -745,13 +805,16 @@ class SupabaseDatabase {
     storeCategories.forEach((c) => catNameMap.set(c.id, c.name));
 
     const { data: snapData, error: snapErr } = await client.from('menu_snapshots').insert({
-      store_id: storeId,
+      store_id: toValidUuidOrNull(storeId),
       store_name: store ? store.name : 'Custom Store',
       store_logo: store?.logo || '',
       store_address: store?.address || ''
     }).select().single();
 
-    if (snapErr || !snapData) return localDb.createSnapshotFromStore(storeId);
+    if (snapErr || !snapData) {
+      console.error('Supabase createSnapshotFromStore error:', snapErr);
+      return localDb.createSnapshotFromStore(storeId);
+    }
 
     const snapshot = snapData as MenuSnapshot;
     const itemsToInsert = storeItems.map((item) => ({
@@ -762,11 +825,14 @@ class SupabaseDatabase {
       price: item.price,
       image: item.image || '',
       is_available: item.is_available,
-      original_item_id: item.id
+      original_item_id: toValidUuidOrNull(item.id)
     }));
 
     const { data: itemsData, error: itemsErr } = await client.from('menu_snapshot_items').insert(itemsToInsert).select();
-    if (itemsErr || !itemsData) return localDb.createSnapshotFromStore(storeId);
+    if (itemsErr || !itemsData) {
+      console.error('Supabase insert snapshot items error:', itemsErr);
+      return localDb.createSnapshotFromStore(storeId);
+    }
 
     return { snapshot, items: itemsData as MenuSnapshotItem[] };
   }
@@ -781,7 +847,10 @@ class SupabaseDatabase {
       store_name: storeName
     }).select().single();
 
-    if (snapErr || !snapData) return localDb.createCustomSnapshot(storeName, customItems);
+    if (snapErr || !snapData) {
+      console.error('Supabase createCustomSnapshot error:', snapErr);
+      return localDb.createCustomSnapshot(storeName, customItems);
+    }
 
     const snapshot = snapData as MenuSnapshot;
     const itemsToInsert = customItems.map((item) => ({
@@ -794,7 +863,10 @@ class SupabaseDatabase {
     }));
 
     const { data: itemsData, error: itemsErr } = await client.from('menu_snapshot_items').insert(itemsToInsert).select();
-    if (itemsErr || !itemsData) return localDb.createCustomSnapshot(storeName, customItems);
+    if (itemsErr || !itemsData) {
+      console.error('Supabase insert custom snapshot items error:', itemsErr);
+      return localDb.createCustomSnapshot(storeName, customItems);
+    }
 
     return { snapshot, items: itemsData as MenuSnapshotItem[] };
   }
@@ -802,7 +874,9 @@ class SupabaseDatabase {
   async getSnapshotById(snapshotId: string): Promise<MenuSnapshot | null> {
     const client = this.client;
     if (!client) return localDb.getSnapshotById(snapshotId);
-    const { data, error } = await client.from('menu_snapshots').select('*').eq('id', snapshotId).maybeSingle();
+    const validUuid = toValidUuidOrNull(snapshotId);
+    if (!validUuid) return localDb.getSnapshotById(snapshotId);
+    const { data, error } = await client.from('menu_snapshots').select('*').eq('id', validUuid).maybeSingle();
     if (error || !data) return localDb.getSnapshotById(snapshotId);
     return data as MenuSnapshot;
   }
@@ -810,7 +884,9 @@ class SupabaseDatabase {
   async getSnapshotItems(snapshotId: string): Promise<MenuSnapshotItem[]> {
     const client = this.client;
     if (!client) return localDb.getSnapshotItems(snapshotId);
-    const { data, error } = await client.from('menu_snapshot_items').select('*').eq('snapshot_id', snapshotId);
+    const validUuid = toValidUuidOrNull(snapshotId);
+    if (!validUuid) return localDb.getSnapshotItems(snapshotId);
+    const { data, error } = await client.from('menu_snapshot_items').select('*').eq('snapshot_id', validUuid);
     if (error || !data) return localDb.getSnapshotItems(snapshotId);
     return data as MenuSnapshotItem[];
   }
@@ -828,14 +904,19 @@ class SupabaseDatabase {
     const client = this.client;
     if (!client) return localDb.getSessionByShareCode(shareCode);
     const { data, error } = await client.from('order_sessions').select('*').eq('share_code', shareCode).maybeSingle();
-    if (error || !data) return localDb.getSessionByShareCode(shareCode);
+    if (error || !data) {
+      console.warn('Supabase getSessionByShareCode fallback:', error);
+      return localDb.getSessionByShareCode(shareCode);
+    }
     return data as OrderSession;
   }
 
   async getSessionById(id: string): Promise<OrderSession | null> {
     const client = this.client;
     if (!client) return localDb.getSessionById(id);
-    const { data, error } = await client.from('order_sessions').select('*').eq('id', id).maybeSingle();
+    const validUuid = toValidUuidOrNull(id);
+    if (!validUuid) return localDb.getSessionById(id);
+    const { data, error } = await client.from('order_sessions').select('*').eq('id', validUuid).maybeSingle();
     if (error || !data) return localDb.getSessionById(id);
     return data as OrderSession;
   }
@@ -856,7 +937,7 @@ class SupabaseDatabase {
     const shareCode = generateShareCode(6);
     const { data, error } = await client.from('order_sessions').insert({
       host_name: sessionData.host_name || 'Group Order Host',
-      store_id: sessionData.store_id || null,
+      store_id: toValidUuidOrNull(sessionData.store_id),
       menu_snapshot_id: sessionData.snapshot_id,
       name: sessionData.name,
       share_code: shareCode,
@@ -867,7 +948,10 @@ class SupabaseDatabase {
       payment_notes: sessionData.payment_notes || ''
     }).select().single();
 
-    if (error || !data) return localDb.createSession(sessionData);
+    if (error || !data) {
+      console.error('Supabase createSession error:', error);
+      return localDb.createSession(sessionData);
+    }
     return data as OrderSession;
   }
 
