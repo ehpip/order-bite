@@ -24,6 +24,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
   // Menu Search & Categories
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'sold_out'>('all');
 
   // Cart State: Map of snapshot_item_id -> { quantity, notes }
   const [cart, setCart] = useState<Map<string, { quantity: number; notes: string }>>(new Map());
@@ -87,6 +88,12 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
   };
 
   const updateQuantity = (itemId: string, delta: number) => {
+    const targetItem = snapshotItems.find((i) => i.id === itemId);
+    if (delta > 0 && targetItem && targetItem.is_available === false) {
+      alert(`Sorry, "${targetItem.name}" is currently sold out and unavailable to order.`);
+      return;
+    }
+
     const newCart = new Map(cart);
     const current = newCart.get(itemId) || { quantity: 0, notes: '' };
     const newQty = Math.max(0, current.quantity + delta);
@@ -112,7 +119,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
 
   cart.forEach((val, itemId) => {
     const item = snapshotItems.find((i) => i.id === itemId);
-    if (item) {
+    if (item && item.is_available !== false) {
       totalCartItemsCount += val.quantity;
       cartFoodSubtotal += item.price * val.quantity;
     }
@@ -120,6 +127,20 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
 
   const handleSubmitOrder = async () => {
     if (!session || !memberName.trim() || totalCartItemsCount === 0) return;
+
+    // Check for any unavailable items currently in cart
+    const unavailableInCart: string[] = [];
+    cart.forEach((val, itemId) => {
+      const item = snapshotItems.find((i) => i.id === itemId);
+      if (item && item.is_available === false && val.quantity > 0) {
+        unavailableInCart.push(item.name);
+      }
+    });
+
+    if (unavailableInCart.length > 0) {
+      alert(`The following item(s) are sold out and cannot be ordered: ${unavailableInCart.join(', ')}. Please remove them from your cart.`);
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -191,11 +212,22 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
   // Extract Categories
   const categoryNames = Array.from(new Set(snapshotItems.map((i) => i.category_name || 'General')));
 
+  const availableCount = snapshotItems.filter((i) => i.is_available !== false).length;
+  const soldOutCount = snapshotItems.filter((i) => i.is_available === false).length;
+
   const filteredItems = snapshotItems.filter((item) => {
+    const isAvailable = item.is_available !== false;
+    const matchesAvailability =
+      availabilityFilter === 'all' ||
+      (availabilityFilter === 'available' && isAvailable) ||
+      (availabilityFilter === 'sold_out' && !isAvailable);
+
     const matchesCat = selectedCategory === 'All' || item.category_name === selectedCategory;
-    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch =
+      item.name.toLowerCase().includes(search.toLowerCase()) ||
       (item.description && item.description.toLowerCase().includes(search.toLowerCase()));
-    return matchesCat && matchesSearch;
+
+    return matchesAvailability && matchesCat && matchesSearch;
   });
 
   return (
@@ -335,7 +367,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                     selectedCategory === 'All' ? 'bg-orange-600 text-white' : 'bg-slate-100 text-slate-700'
                   }`}
                 >
-                  All Items
+                  All Categories
                 </button>
                 {categoryNames.map((cat, idx) => (
                   <button
@@ -349,72 +381,149 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                   </button>
                 ))}
               </div>
+
+              {/* Availability Filter Pills */}
+              {soldOutCount > 0 && (
+                <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100 text-[11px]">
+                  <span className="text-slate-400 font-semibold mr-1">Status:</span>
+                  <button
+                    onClick={() => setAvailabilityFilter('all')}
+                    className={`px-2.5 py-0.5 rounded-lg font-bold transition-colors cursor-pointer ${
+                      availabilityFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    All ({snapshotItems.length})
+                  </button>
+                  <button
+                    onClick={() => setAvailabilityFilter('available')}
+                    className={`px-2.5 py-0.5 rounded-lg font-bold transition-colors cursor-pointer ${
+                      availabilityFilter === 'available' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    }`}
+                  >
+                    Available ({availableCount})
+                  </button>
+                  <button
+                    onClick={() => setAvailabilityFilter('sold_out')}
+                    className={`px-2.5 py-0.5 rounded-lg font-bold transition-colors cursor-pointer ${
+                      availabilityFilter === 'sold_out' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                    }`}
+                  >
+                    Sold Out ({soldOutCount})
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Menu Items List */}
             <div className="space-y-3">
-              {filteredItems.map((item) => {
-                const cartVal = cart.get(item.id);
-                const quantity = cartVal?.quantity || 0;
+              {filteredItems.length === 0 ? (
+                <div className="bg-white p-8 text-center rounded-2xl border border-slate-200 text-slate-500 text-xs">
+                  No menu items found matching your filter.
+                </div>
+              ) : (
+                filteredItems.map((item) => {
+                  const cartVal = cart.get(item.id);
+                  const quantity = cartVal?.quantity || 0;
+                  const isAvailable = item.is_available !== false;
 
-                return (
-                  <div
-                    key={item.id}
-                    className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex gap-3.5 items-center justify-between"
-                  >
-                    {item.image && (
-                      <img src={item.image} alt={item.name} className="w-20 h-20 rounded-xl object-cover border shrink-0" />
-                    )}
-
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <h3 className="font-bold text-sm text-slate-900 line-clamp-1">{item.name}</h3>
-                      <p className="text-xs text-slate-500 line-clamp-2">{item.description}</p>
-                      <div className="text-sm font-extrabold text-orange-600">{formatCurrency(item.price)}</div>
-
-                      {/* Custom note field when quantity > 0 */}
-                      {quantity > 0 && (
-                        <input
-                          type="text"
-                          value={cartVal?.notes || ''}
-                          onChange={(e) => updateItemNotes(item.id, e.target.value)}
-                          placeholder="Note: e.g. Less ice, extra spicy"
-                          className="w-full px-2 py-1 text-[11px] border border-slate-200 rounded-lg outline-hidden focus:border-orange-500 bg-slate-50"
-                        />
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-4 rounded-2xl border shadow-2xs flex gap-3.5 items-center justify-between transition-colors ${
+                        isAvailable ? 'bg-white border-slate-200' : 'bg-slate-50/80 border-slate-200/80 opacity-80'
+                      }`}
+                    >
+                      {item.image && (
+                        <div className="relative shrink-0">
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className={`w-20 h-20 rounded-xl object-cover border shrink-0 ${
+                              !isAvailable ? 'grayscale opacity-75' : ''
+                            }`}
+                          />
+                          {!isAvailable && (
+                            <div className="absolute inset-0 bg-slate-900/40 rounded-xl flex items-center justify-center">
+                              <span className="text-[9px] font-extrabold text-white bg-rose-600 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                Sold Out
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </div>
 
-                    {/* Quantity Stepper */}
-                    {!isClosed && (
-                      <div className="shrink-0">
-                        {quantity === 0 ? (
-                          <button
-                            onClick={() => updateQuantity(item.id, 1)}
-                            className="bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs px-3 py-2 rounded-xl border border-orange-200 transition-colors cursor-pointer"
-                          >
-                            + Add
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                            <button
-                              onClick={() => updateQuantity(item.id, -1)}
-                              className="w-7 h-7 rounded-lg bg-white text-slate-700 font-bold flex items-center justify-center shadow-2xs hover:bg-slate-50 cursor-pointer"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="font-bold text-xs text-slate-900 w-5 text-center">{quantity}</span>
-                            <button
-                              onClick={() => updateQuantity(item.id, 1)}
-                              className="w-7 h-7 rounded-lg bg-orange-600 text-white font-bold flex items-center justify-center shadow-2xs hover:bg-orange-700 cursor-pointer"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className={`font-bold text-sm line-clamp-1 ${isAvailable ? 'text-slate-900' : 'text-slate-500 line-through'}`}>
+                            {item.name}
+                          </h3>
+                          {isAvailable ? (
+                            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                              Available
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full border border-rose-200 shrink-0">
+                              Sold Out
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 line-clamp-2">{item.description}</p>
+                        <div className={`text-sm font-extrabold ${isAvailable ? 'text-orange-600' : 'text-slate-400'}`}>
+                          {formatCurrency(item.price)}
+                        </div>
+
+                        {/* Custom note field when quantity > 0 */}
+                        {quantity > 0 && isAvailable && (
+                          <input
+                            type="text"
+                            value={cartVal?.notes || ''}
+                            onChange={(e) => updateItemNotes(item.id, e.target.value)}
+                            placeholder="Note: e.g. Less ice, extra spicy"
+                            className="w-full px-2 py-1 text-[11px] border border-slate-200 rounded-lg outline-hidden focus:border-orange-500 bg-slate-50"
+                          />
                         )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                      {/* Quantity Stepper */}
+                      {!isClosed && (
+                        <div className="shrink-0">
+                          {!isAvailable ? (
+                            <button
+                              disabled
+                              className="bg-rose-50 text-rose-600 font-bold text-xs px-3 py-2 rounded-xl border border-rose-200 cursor-not-allowed opacity-90"
+                            >
+                              Sold Out
+                            </button>
+                          ) : quantity === 0 ? (
+                            <button
+                              onClick={() => updateQuantity(item.id, 1)}
+                              className="bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs px-3 py-2 rounded-xl border border-orange-200 transition-colors cursor-pointer"
+                            >
+                              + Add
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                              <button
+                                onClick={() => updateQuantity(item.id, -1)}
+                                className="w-7 h-7 rounded-lg bg-white text-slate-700 font-bold flex items-center justify-center shadow-2xs hover:bg-slate-50 cursor-pointer"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="font-bold text-xs text-slate-900 w-5 text-center">{quantity}</span>
+                              <button
+                                onClick={() => updateQuantity(item.id, 1)}
+                                className="w-7 h-7 rounded-lg bg-orange-600 text-white font-bold flex items-center justify-center shadow-2xs hover:bg-orange-700 cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </>
         )}

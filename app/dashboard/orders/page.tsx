@@ -91,7 +91,7 @@ export default function SessionsListPage() {
       {/* Sessions Grid */}
       {filteredSessions.length === 0 ? (
         <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-500 text-sm">
-          No group order sessions found. Click "+ Create Group Order" to start!
+          No group order sessions found. Click &quot;+ Create Group Order&quot; to start!
         </div>
       ) : (
         <div className="space-y-4">
