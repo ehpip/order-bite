@@ -14,10 +14,6 @@ import {
   INITIAL_STORES,
   INITIAL_CATEGORIES,
   INITIAL_ITEMS,
-  DEMO_SNAPSHOT,
-  DEMO_SNAPSHOT_ITEMS,
-  DEMO_SESSION,
-  DEMO_ORDERS,
 } from './seed-data';
 import { generateShareCode } from '../formatters';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabase/client';
@@ -48,10 +44,10 @@ class LocalDatabase {
       this.stores = [...INITIAL_STORES];
       this.categories = [...INITIAL_CATEGORIES];
       this.items = [...INITIAL_ITEMS];
-      this.snapshots = [DEMO_SNAPSHOT];
-      this.snapshotItems = [...DEMO_SNAPSHOT_ITEMS];
-      this.sessions = [DEMO_SESSION];
-      this.orders = [...DEMO_ORDERS];
+      this.snapshots = [];
+      this.snapshotItems = [];
+      this.sessions = [];
+      this.orders = [];
       return;
     }
 
@@ -60,29 +56,30 @@ class LocalDatabase {
       this.stores = [...INITIAL_STORES];
       this.categories = [...INITIAL_CATEGORIES];
       this.items = [...INITIAL_ITEMS];
-      this.snapshots = [DEMO_SNAPSHOT];
-      this.snapshotItems = [...DEMO_SNAPSHOT_ITEMS];
-      this.sessions = [DEMO_SESSION];
-      this.orders = [...DEMO_ORDERS];
+      this.snapshots = [];
+      this.snapshotItems = [];
+      this.sessions = [];
+      this.orders = [];
       this.persistAll();
     } else {
       try {
         this.stores = JSON.parse(savedStores);
         this.categories = JSON.parse(localStorage.getItem(STORAGE_KEY_CATEGORIES) || '[]');
         this.items = JSON.parse(localStorage.getItem(STORAGE_KEY_ITEMS) || '[]');
-        this.snapshots = JSON.parse(localStorage.getItem(STORAGE_KEY_SNAPSHOTS) || '[]');
-        this.snapshotItems = JSON.parse(localStorage.getItem(STORAGE_KEY_SNAPSHOT_ITEMS) || '[]');
-        this.sessions = JSON.parse(localStorage.getItem(STORAGE_KEY_SESSIONS) || '[]');
-        this.orders = JSON.parse(localStorage.getItem(STORAGE_KEY_ORDERS) || '[]');
+        this.snapshots = JSON.parse(localStorage.getItem(STORAGE_KEY_SNAPSHOTS) || '[]').filter((s: MenuSnapshot) => s.id !== 'snap-demo-mcd');
+        this.snapshotItems = JSON.parse(localStorage.getItem(STORAGE_KEY_SNAPSHOT_ITEMS) || '[]').filter((i: MenuSnapshotItem) => i.snapshot_id !== 'snap-demo-mcd');
+        this.sessions = JSON.parse(localStorage.getItem(STORAGE_KEY_SESSIONS) || '[]').filter((s: OrderSession) => s.id !== 'session-friday-lunch');
+        this.orders = JSON.parse(localStorage.getItem(STORAGE_KEY_ORDERS) || '[]').filter((o: MemberOrder) => o.session_id !== 'session-friday-lunch');
+        this.persistAll();
       } catch (e) {
         console.error('Failed to parse saved local state, resetting to seed data', e);
         this.stores = [...INITIAL_STORES];
         this.categories = [...INITIAL_CATEGORIES];
         this.items = [...INITIAL_ITEMS];
-        this.snapshots = [DEMO_SNAPSHOT];
-        this.snapshotItems = [...DEMO_SNAPSHOT_ITEMS];
-        this.sessions = [DEMO_SESSION];
-        this.orders = [...DEMO_ORDERS];
+        this.snapshots = [];
+        this.snapshotItems = [];
+        this.sessions = [];
+        this.orders = [];
         this.persistAll();
       }
     }
@@ -351,20 +348,6 @@ class LocalDatabase {
 
   // --- SESSIONS ---
   async getSessions(hostId?: string): Promise<OrderSession[]> {
-    // Auto-refresh DEMO_SESSION deadline if it has expired so home page & demo always have an active session available
-    const demoIdx = this.sessions.findIndex((s) => s.id === 'session-friday-lunch');
-    if (demoIdx >= 0) {
-      const demo = this.sessions[demoIdx];
-      if (new Date(demo.deadline).getTime() < Date.now()) {
-        this.sessions[demoIdx] = {
-          ...demo,
-          deadline: new Date(Date.now() + 1000 * 60 * 45).toISOString(),
-          status: 'open',
-        };
-        this.persistAll();
-      }
-    }
-
     let list = [...this.sessions];
     if (hostId) {
       list = list.filter((s) => s.host_id === hostId);
@@ -966,13 +949,11 @@ class SupabaseDatabase {
       query = query.eq('host_id', hostId);
     }
     const { data, error } = await query.order('created_at', { ascending: false });
-    if (error || !data) return localSessions;
-
-    const map = new Map<string, OrderSession>();
-    localSessions.forEach((s) => map.set(s.id, s));
-    (data as OrderSession[]).forEach((s) => map.set(s.id, s));
-
-    return Array.from(map.values()).sort(
+    if (error || !data) {
+      console.warn('Supabase getSessions fallback to local:', error);
+      return localSessions;
+    }
+    return (data as OrderSession[]).sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }
