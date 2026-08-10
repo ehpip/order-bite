@@ -56,60 +56,114 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
     const savedName = localStorage.getItem(`member_name_${sess.id}`);
     const savedMemberId = localStorage.getItem(`member_id_${sess.id}`);
 
-    if (savedName && savedMemberId) {
-      setMemberName(savedName);
+    if (savedName || savedMemberId) {
+      if (savedName) setMemberName(savedName);
       setNameSubmitted(true);
 
-      // Fetch existing order if any
-      const order = await db.getOrderForMember(sess.id, savedMemberId);
+      // Fetch existing order if any (first by member_id, then fallback to member_name)
+      let order: MemberOrder | null = null;
+      if (savedMemberId) {
+        order = await db.getOrderForMember(sess.id, savedMemberId);
+      }
+      if (!order && savedName) {
+        const sessionOrders = await db.getOrdersForSession(sess.id);
+        const match = sessionOrders.find(
+          (o) => o.member_name.trim().toLowerCase() === savedName.trim().toLowerCase()
+        );
+        if (match) {
+          order = match;
+          localStorage.setItem(`member_id_${sess.id}`, match.member_id);
+        }
+      }
+
       if (order) {
         setExistingOrder(order);
-        // Pre-fill cart with existing items
+        // Pre-fill cart with existing items matching snapshot items accurately
         const newCart = new Map<string, { quantity: number; notes: string }>();
         order.items.forEach((item) => {
-          newCart.set(item.snapshot_item_id, { quantity: item.quantity, notes: item.notes || '' });
+          const match = items.find(
+            (si) => String(si.id) === String(item.snapshot_item_id) || si.name.trim().toLowerCase() === item.item_name.trim().toLowerCase()
+          );
+          const key = match ? match.id : item.snapshot_item_id;
+          newCart.set(key, { quantity: item.quantity, notes: item.notes || '' });
         });
         setCart(newCart);
       }
     }
   }
 
-  const handleStartOrdering = (e: React.FormEvent) => {
+  const handleStartOrdering = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!memberName.trim() || !session) return;
 
+    const trimmedName = memberName.trim();
     let memberId = localStorage.getItem(`member_id_${session.id}`);
-    if (!memberId) {
+
+    // Check if an order already exists for this member name in this session
+    const sessionOrders = await db.getOrdersForSession(session.id);
+    const existingForName = sessionOrders.find(
+      (o) => o.member_name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+
+    if (existingForName) {
+      memberId = existingForName.member_id;
+      setExistingOrder(existingForName);
+      const newCart = new Map<string, { quantity: number; notes: string }>();
+      existingForName.items.forEach((item) => {
+        const match = snapshotItems.find(
+          (si) => String(si.id) === String(item.snapshot_item_id) || si.name.trim().toLowerCase() === item.item_name.trim().toLowerCase()
+        );
+        const key = match ? match.id : item.snapshot_item_id;
+        newCart.set(key, { quantity: item.quantity, notes: item.notes || '' });
+      });
+      setCart(newCart);
+    } else if (!memberId) {
       memberId = `mem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      localStorage.setItem(`member_id_${session.id}`, memberId);
     }
-    localStorage.setItem(`member_name_${session.id}`, memberName.trim());
+
+    localStorage.setItem(`member_id_${session.id}`, memberId);
+    localStorage.setItem(`member_name_${session.id}`, trimmedName);
     setNameSubmitted(true);
   };
 
   const updateQuantity = (itemId: string, delta: number) => {
-    const targetItem = snapshotItems.find((i) => i.id === itemId);
+    const targetItem = snapshotItems.find((i) => String(i.id) === String(itemId));
     if (delta > 0 && targetItem && targetItem.is_available === false) {
       alert(`Sorry, "${targetItem.name}" is currently sold out and unavailable to order.`);
       return;
     }
 
     const newCart = new Map(cart);
-    const current = newCart.get(itemId) || { quantity: 0, notes: '' };
+    let keyToUse = itemId;
+    for (const k of newCart.keys()) {
+      if (String(k) === String(itemId)) {
+        keyToUse = k;
+        break;
+      }
+    }
+
+    const current = newCart.get(keyToUse) || { quantity: 0, notes: '' };
     const newQty = Math.max(0, current.quantity + delta);
 
     if (newQty === 0) {
-      newCart.delete(itemId);
+      newCart.delete(keyToUse);
     } else {
-      newCart.set(itemId, { ...current, quantity: newQty });
+      newCart.set(keyToUse, { ...current, quantity: newQty });
     }
     setCart(newCart);
   };
 
   const updateItemNotes = (itemId: string, notes: string) => {
     const newCart = new Map(cart);
-    const current = newCart.get(itemId) || { quantity: 1, notes: '' };
-    newCart.set(itemId, { ...current, notes });
+    let keyToUse = itemId;
+    for (const k of newCart.keys()) {
+      if (String(k) === String(itemId)) {
+        keyToUse = k;
+        break;
+      }
+    }
+    const current = newCart.get(keyToUse) || { quantity: 1, notes: '' };
+    newCart.set(keyToUse, { ...current, notes });
     setCart(newCart);
   };
 
@@ -118,7 +172,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
   let cartFoodSubtotal = 0;
 
   cart.forEach((val, itemId) => {
-    const item = snapshotItems.find((i) => i.id === itemId);
+    const item = snapshotItems.find((i) => String(i.id) === String(itemId));
     if (item && item.is_available !== false) {
       totalCartItemsCount += val.quantity;
       cartFoodSubtotal += item.price * val.quantity;
@@ -131,7 +185,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
     // Check for any unavailable items currently in cart
     const unavailableInCart: string[] = [];
     cart.forEach((val, itemId) => {
-      const item = snapshotItems.find((i) => i.id === itemId);
+      const item = snapshotItems.find((i) => String(i.id) === String(itemId));
       if (item && item.is_available === false && val.quantity > 0) {
         unavailableInCart.push(item.name);
       }
@@ -146,11 +200,14 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
       setSubmitting(true);
       const memberId = localStorage.getItem(`member_id_${session.id}`) || `mem-${Date.now()}`;
 
-      const reqItems = Array.from(cart.entries()).map(([itemId, val]) => ({
-        snapshot_item_id: itemId,
-        quantity: val.quantity,
-        notes: val.notes,
-      }));
+      const reqItems = Array.from(cart.entries()).map(([itemId, val]) => {
+        const match = snapshotItems.find((i) => String(i.id) === String(itemId));
+        return {
+          snapshot_item_id: match ? match.id : itemId,
+          quantity: val.quantity,
+          notes: val.notes,
+        };
+      });
 
       const submittedOrder = await db.submitMemberOrder({
         session_id: session.id,
@@ -161,9 +218,9 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
 
       setExistingOrder(submittedOrder);
       setCheckoutOpen(false);
-      setSuccessMessage('Order placed successfully!');
+      setSuccessMessage('Order saved successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
-      loadData();
+      await loadData();
     } catch (err: any) {
       alert(err.message || 'Failed to submit order.');
     } finally {
@@ -422,7 +479,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                 </div>
               ) : (
                 filteredItems.map((item) => {
-                  const cartVal = cart.get(item.id);
+                  const cartVal = cart.get(item.id) || Array.from(cart.entries()).find(([k]) => String(k) === String(item.id))?.[1];
                   const quantity = cartVal?.quantity || 0;
                   const isAvailable = item.is_available !== false;
 
@@ -569,7 +626,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
 
               <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
                 {Array.from(cart.entries()).map(([itemId, val]) => {
-                  const item = snapshotItems.find((i) => i.id === itemId);
+                  const item = snapshotItems.find((i) => String(i.id) === String(itemId));
                   if (!item) return null;
 
                   return (
