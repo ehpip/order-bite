@@ -44,6 +44,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = Boolean(user && user.email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim());
 
   useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
     async function initAuth() {
       // Initialize persistent device host ID for browser/device context
       if (typeof window !== 'undefined') {
@@ -110,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           });
 
-          return () => subscription.unsubscribe();
+          unsubscribe = () => subscription.unsubscribe();
         } catch (e) {
           console.warn('Supabase auth session check warning:', e);
         }
@@ -120,6 +122,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     initAuth().finally(() => setIsLoading(false));
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const loginWithGoogle = async () => {

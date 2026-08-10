@@ -5,9 +5,15 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
+let cachedSupabaseClient: SupabaseClient | null = null;
+
 export function getSupabaseClient(): SupabaseClient | null {
   if (!isSupabaseConfigured) {
     return null;
   }
-  return createClient(supabaseUrl!, supabaseAnonKey!);
+  if (!cachedSupabaseClient) {
+    cachedSupabaseClient = createClient(supabaseUrl!, supabaseAnonKey!);
+  }
+  return cachedSupabaseClient;
 }
+

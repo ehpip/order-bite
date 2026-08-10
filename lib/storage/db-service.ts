@@ -351,6 +351,20 @@ class LocalDatabase {
 
   // --- SESSIONS ---
   async getSessions(hostId?: string): Promise<OrderSession[]> {
+    // Auto-refresh DEMO_SESSION deadline if it has expired so home page & demo always have an active session available
+    const demoIdx = this.sessions.findIndex((s) => s.id === 'session-friday-lunch');
+    if (demoIdx >= 0) {
+      const demo = this.sessions[demoIdx];
+      if (new Date(demo.deadline).getTime() < Date.now()) {
+        this.sessions[demoIdx] = {
+          ...demo,
+          deadline: new Date(Date.now() + 1000 * 60 * 45).toISOString(),
+          status: 'open',
+        };
+        this.persistAll();
+      }
+    }
+
     let list = [...this.sessions];
     if (hostId) {
       list = list.filter((s) => s.host_id === hostId);
@@ -944,15 +958,23 @@ class SupabaseDatabase {
 
   // --- SESSIONS ---
   async getSessions(hostId?: string): Promise<OrderSession[]> {
+    const localSessions = await localDb.getSessions(hostId);
     const client = this.client;
-    if (!client) return localDb.getSessions(hostId);
+    if (!client) return localSessions;
     let query = client.from('order_sessions').select('*');
     if (hostId) {
       query = query.eq('host_id', hostId);
     }
     const { data, error } = await query.order('created_at', { ascending: false });
-    if (error || !data) return localDb.getSessions(hostId);
-    return data as OrderSession[];
+    if (error || !data) return localSessions;
+
+    const map = new Map<string, OrderSession>();
+    localSessions.forEach((s) => map.set(s.id, s));
+    (data as OrderSession[]).forEach((s) => map.set(s.id, s));
+
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }
 
   async getSessionByShareCode(shareCode: string): Promise<OrderSession | null> {
@@ -987,17 +1009,18 @@ class SupabaseDatabase {
     host_name?: string;
     host_id?: string;
   }): Promise<OrderSession> {
-    const client = this.client;
-    if (!client) return localDb.createSession(sessionData);
+    const localSession = await localDb.createSession(sessionData);
 
-    const shareCode = generateShareCode(6);
+    const client = this.client;
+    if (!client) return localSession;
+
     const { data, error } = await client.from('order_sessions').insert({
       host_id: sessionData.host_id || 'host-user',
       host_name: sessionData.host_name || 'Group Order Host',
       store_id: toValidUuidOrNull(sessionData.store_id),
       menu_snapshot_id: sessionData.snapshot_id,
       name: sessionData.name,
-      share_code: shareCode,
+      share_code: localSession.share_code,
       status: 'open',
       deadline: sessionData.deadline,
       shipping_cost: Number(sessionData.shipping_cost) || 0,
@@ -1007,7 +1030,7 @@ class SupabaseDatabase {
 
     if (error || !data) {
       console.error('Supabase createSession error:', error);
-      return localDb.createSession(sessionData);
+      return localSession;
     }
     return data as OrderSession;
   }
