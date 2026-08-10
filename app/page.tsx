@@ -69,7 +69,7 @@ export default function HomePage() {
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
               <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">1</div>
               <div className="text-sm font-bold text-slate-900">Choose Store</div>
-              <div className="text-xs text-slate-500 mt-1">Select McDonald's, KFC, or custom restaurant</div>
+              <div className="text-xs text-slate-500 mt-1">Select McDonald&apos;s, KFC, or custom restaurant</div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
               <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">2</div>

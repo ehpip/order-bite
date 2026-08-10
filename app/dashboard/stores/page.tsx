@@ -2,16 +2,19 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Store as StoreIcon, PlusCircle, Search, Filter, Trash2, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Store as StoreIcon, PlusCircle, Search, Filter, Trash2, ArrowRight, ShieldCheck, FileSpreadsheet } from 'lucide-react';
 import { db } from '@/lib/storage/db-service';
 import { Store } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
+import ImportMenuModal from '@/components/import-menu-modal';
 
 export default function StoresPage() {
   const { user, isAdmin, loginWithGoogle } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadStores();
@@ -65,15 +68,31 @@ export default function StoresPage() {
         </div>
 
         {isAdmin && (
-          <Link
-            href="/dashboard/stores/new"
-            className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-colors shadow-xs"
-          >
-            <PlusCircle className="w-4 h-4" />
-            Create New Store
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-colors shadow-xs cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-orange-400" />
+              Import Store (JSON/CSV)
+            </button>
+            <Link
+              href="/dashboard/stores/new"
+              className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-colors shadow-xs"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Create New Store
+            </Link>
+          </div>
         )}
       </div>
+
+      {toastMsg && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-between">
+          <span>{toastMsg}</span>
+          <button onClick={() => setToastMsg(null)} className="text-emerald-600 hover:text-emerald-900 font-extrabold ml-2">×</button>
+        </div>
+      )}
 
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
@@ -166,6 +185,15 @@ export default function StoresPage() {
           ))}
         </div>
       )}
+
+      <ImportMenuModal
+        opened={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImportSuccess={(res) => {
+          setToastMsg(`Successfully imported "${res.storeName || 'Store'}" with ${res.rowsCount} menu items!`);
+          loadStores();
+        }}
+      />
     </div>
   );
 }

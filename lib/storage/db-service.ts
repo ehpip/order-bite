@@ -258,6 +258,23 @@ class LocalDatabase {
     return { added: count };
   }
 
+  async importFullStore(
+    storeData: { name: string; description?: string; logo?: string; cover_image?: string; address?: string },
+    rows: { name: string; description?: string; category?: string; price: number; is_available?: boolean; image_url?: string; sku?: string }[]
+  ): Promise<{ store: Store; addedItemsCount: number }> {
+    const store = await this.saveStore({
+      name: storeData.name,
+      description: storeData.description || '',
+      logo: storeData.logo || storeData.cover_image || '',
+      cover_image: storeData.cover_image || storeData.logo || '',
+      address: storeData.address || '',
+      status: 'active',
+    });
+
+    const result = await this.importMenuItems(store.id, rows);
+    return { store, addedItemsCount: result.added };
+  }
+
   // --- MENU SNAPSHOTS ---
   async createSnapshotFromStore(storeId: string): Promise<{ snapshot: MenuSnapshot; items: MenuSnapshotItem[] }> {
     const store = await this.getStoreById(storeId);
@@ -808,6 +825,26 @@ class SupabaseDatabase {
     return { added: count };
   }
 
+  async importFullStore(
+    storeData: { name: string; description?: string; logo?: string; cover_image?: string; address?: string },
+    rows: { name: string; description?: string; category?: string; price: number; is_available?: boolean; image_url?: string; sku?: string }[]
+  ): Promise<{ store: Store; addedItemsCount: number }> {
+    const client = this.client;
+    if (!client) return localDb.importFullStore(storeData, rows);
+
+    const store = await this.saveStore({
+      name: storeData.name,
+      description: storeData.description || '',
+      logo: storeData.logo || storeData.cover_image || '',
+      cover_image: storeData.cover_image || storeData.logo || '',
+      address: storeData.address || '',
+      status: 'active',
+    });
+
+    const result = await this.importMenuItems(store.id, rows);
+    return { store, addedItemsCount: result.added };
+  }
+
   // --- MENU SNAPSHOTS ---
   async createSnapshotFromStore(storeId: string): Promise<{ snapshot: MenuSnapshot; items: MenuSnapshotItem[] }> {
     const client = this.client;
@@ -1203,6 +1240,7 @@ class DatabaseService {
   saveItem(itemData: any) { return this.activeDb.saveItem(itemData); }
   deleteItem(id: string) { return this.activeDb.deleteItem(id); }
   importMenuItems(storeId: string, rows: any) { return this.activeDb.importMenuItems(storeId, rows); }
+  importFullStore(storeData: any, rows: any) { return this.activeDb.importFullStore(storeData, rows); }
   createSnapshotFromStore(storeId: string) { return this.activeDb.createSnapshotFromStore(storeId); }
   createCustomSnapshot(storeName: string, customItems: any) { return this.activeDb.createCustomSnapshot(storeName, customItems); }
   getSnapshotById(snapshotId: string) { return this.activeDb.getSnapshotById(snapshotId); }

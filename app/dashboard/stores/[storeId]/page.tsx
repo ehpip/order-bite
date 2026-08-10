@@ -161,7 +161,7 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
               className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs sm:text-sm transition-colors shadow-2xs cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              Import CSV / Excel
+              Import JSON / CSV
             </button>
             <button
               onClick={() => {
@@ -514,6 +514,7 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
         opened={importModalOpen}
         onClose={() => setImportModalOpen(false)}
         storeId={storeId}
+        storeName={store.name}
         onImportSuccess={() => loadData()}
       />
     </div>

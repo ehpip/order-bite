@@ -165,7 +165,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
           </div>
           <h2 className="text-lg font-bold text-slate-900">Group Order Session Not Found</h2>
           <p className="text-xs text-slate-600 leading-relaxed">
-            We couldn't find a group order session with share code <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-slate-800 font-semibold">{shareCode}</code>.
+            We couldn&apos;t find a group order session with share code <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-slate-800 font-semibold">{shareCode}</code>.
             Please verify the link with the group order host or create a new session.
           </p>
           <Link href="/" className="inline-block bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition-colors">
@@ -292,7 +292,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                       onClick={handleReportPayment}
                       className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs py-2 rounded-xl transition-colors text-center cursor-pointer"
                     >
-                      I've Paid
+                      I&apos;ve Paid
                     </button>
                   ) : existingOrder.payment_status === 'payment_reported' ? (
                     <span className="flex-1 bg-amber-100 text-amber-800 font-bold text-xs py-1.5 rounded-xl text-center">
