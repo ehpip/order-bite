@@ -59,11 +59,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 1. Check local storage
       const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('orderbite_user_email') : null;
+      const storedId = typeof window !== 'undefined' ? localStorage.getItem('orderbite_user_id') : null;
       const storedName = typeof window !== 'undefined' ? localStorage.getItem('orderbite_user_name') : null;
       const storedAvatar = typeof window !== 'undefined' ? localStorage.getItem('orderbite_user_avatar') : null;
 
       if (storedEmail) {
         setUser({
+          id: storedId || undefined,
           email: storedEmail,
           name: storedName || storedEmail.split('@')[0],
           avatarUrl: storedAvatar || undefined,
@@ -77,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user?.email) {
             const sbUser: AuthUser = {
+              id: session.user.id,
               email: session.user.email,
               name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
               avatarUrl: session.user.user_metadata?.avatar_url,
@@ -84,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(sbUser);
             if (typeof window !== 'undefined') {
               localStorage.setItem('orderbite_user_email', sbUser.email);
+              localStorage.setItem('orderbite_user_id', sbUser.id || '');
               if (sbUser.name) localStorage.setItem('orderbite_user_name', sbUser.name);
               if (sbUser.avatarUrl) localStorage.setItem('orderbite_user_avatar', sbUser.avatarUrl);
             }
@@ -92,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             if (session?.user?.email) {
               const sbUser: AuthUser = {
+                id: session.user.id,
                 email: session.user.email,
                 name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
                 avatarUrl: session.user.user_metadata?.avatar_url,
@@ -99,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(sbUser);
               if (typeof window !== 'undefined') {
                 localStorage.setItem('orderbite_user_email', sbUser.email);
+                localStorage.setItem('orderbite_user_id', sbUser.id || '');
                 if (sbUser.name) localStorage.setItem('orderbite_user_name', sbUser.name);
                 if (sbUser.avatarUrl) localStorage.setItem('orderbite_user_avatar', sbUser.avatarUrl);
               }
@@ -106,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(null);
               if (typeof window !== 'undefined') {
                 localStorage.removeItem('orderbite_user_email');
+                localStorage.removeItem('orderbite_user_id');
                 localStorage.removeItem('orderbite_user_name');
                 localStorage.removeItem('orderbite_user_avatar');
               }
@@ -185,12 +192,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('orderbite_user_email');
+      localStorage.removeItem('orderbite_user_id');
       localStorage.removeItem('orderbite_user_name');
       localStorage.removeItem('orderbite_user_avatar');
     }
   };
 
-  const hostIdentifier = user?.email || user?.id || deviceHostId;
+  const hostIdentifier = user?.id || user?.email || deviceHostId;
 
   const isHostOwner = (session: { host_id?: string } | null | undefined): boolean => {
     if (!session || !session.host_id || !hostIdentifier) return false;

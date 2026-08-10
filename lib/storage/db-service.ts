@@ -995,11 +995,17 @@ class SupabaseDatabase {
     const client = this.client;
     if (!client) return localSession;
 
+    const validMenuSnapshotUuid = toValidUuidOrNull(sessionData.snapshot_id);
+    if (!validMenuSnapshotUuid) {
+      console.warn('Supabase createSession: menu_snapshot_id is not a valid UUID, returning local only');
+      return localSession;
+    }
+
     const { data, error } = await client.from('order_sessions').insert({
-      host_id: sessionData.host_id || 'host-user',
+      host_id: toValidUuidOrNull(sessionData.host_id),
       host_name: sessionData.host_name || 'Group Order Host',
       store_id: toValidUuidOrNull(sessionData.store_id),
-      menu_snapshot_id: sessionData.snapshot_id,
+      menu_snapshot_id: validMenuSnapshotUuid,
       name: sessionData.name,
       share_code: localSession.share_code,
       status: 'open',
@@ -1019,10 +1025,15 @@ class SupabaseDatabase {
   async updateSession(id: string, updates: Partial<OrderSession>): Promise<OrderSession | null> {
     const client = this.client;
     if (!client) return localDb.updateSession(id, updates);
-    const { data, error } = await client.from('order_sessions').update({
-      ...updates,
-      updated_at: new Date().toISOString()
-    }).eq('id', id).select().single();
+    const validUuid = toValidUuidOrNull(id);
+    if (!validUuid) return localDb.updateSession(id, updates);
+
+    const safeUpdates: any = { ...updates, updated_at: new Date().toISOString() };
+    if ('host_id' in safeUpdates) safeUpdates.host_id = toValidUuidOrNull(safeUpdates.host_id);
+    if ('store_id' in safeUpdates) safeUpdates.store_id = toValidUuidOrNull(safeUpdates.store_id);
+    if ('menu_snapshot_id' in safeUpdates) safeUpdates.menu_snapshot_id = toValidUuidOrNull(safeUpdates.menu_snapshot_id);
+
+    const { data, error } = await client.from('order_sessions').update(safeUpdates).eq('id', validUuid).select().single();
 
     if (error || !data) return localDb.updateSession(id, updates);
 
@@ -1114,8 +1125,14 @@ class SupabaseDatabase {
       const itemSubtotal = snapItem.price * reqItem.quantity;
       foodSubtotal += itemSubtotal;
 
+      const validSnapItemUuid = toValidUuidOrNull(snapItem.id);
+      if (!validSnapItemUuid) {
+        console.warn(`Supabase submitMemberOrder: snapshot_item_id ${snapItem.id} not a UUID, falling back to local`);
+        return localDb.submitMemberOrder(params);
+      }
+
       itemsToInsert.push({
-        snapshot_item_id: snapItem.id,
+        snapshot_item_id: validSnapItemUuid,
         item_name: snapItem.name,
         unit_price: snapItem.price,
         quantity: reqItem.quantity,
@@ -1127,20 +1144,28 @@ class SupabaseDatabase {
     const existingOrder = await this.getOrderForMember(params.session_id, params.member_id);
     let orderId: string;
 
+    const validSessionUuid = toValidUuidOrNull(params.session_id);
+    if (!validSessionUuid) {
+      console.warn('Supabase submitMemberOrder: session_id not a valid UUID, falling back to local');
+      return localDb.submitMemberOrder(params);
+    }
+
     if (existingOrder) {
-      orderId = existingOrder.id;
+      const validOrderUuid = toValidUuidOrNull(existingOrder.id);
+      if (!validOrderUuid) return localDb.submitMemberOrder(params);
+      orderId = validOrderUuid;
       await client.from('member_orders').update({
         member_name: params.member_name,
         food_subtotal: foodSubtotal,
         grand_total: foodSubtotal,
         status: 'submitted',
         updated_at: new Date().toISOString()
-      }).eq('id', orderId);
+      }).eq('id', validOrderUuid);
 
-      await client.from('member_order_items').delete().eq('order_id', orderId);
+      await client.from('member_order_items').delete().eq('order_id', validOrderUuid);
     } else {
       const { data: newOrd, error: ordErr } = await client.from('member_orders').insert({
-        session_id: params.session_id,
+        session_id: validSessionUuid,
         member_id: params.member_id,
         member_name: params.member_name,
         food_subtotal: foodSubtotal,
@@ -1168,14 +1193,17 @@ class SupabaseDatabase {
   async updateMemberPaymentStatus(orderId: string, paymentStatus: MemberPaymentStatus): Promise<MemberOrder | null> {
     const client = this.client;
     if (!client) return localDb.updateMemberPaymentStatus(orderId, paymentStatus);
+    const validOrderUuid = toValidUuidOrNull(orderId);
+    if (!validOrderUuid) return localDb.updateMemberPaymentStatus(orderId, paymentStatus);
+
     const { data, error } = await client.from('member_orders').update({
       payment_status: paymentStatus,
       updated_at: new Date().toISOString()
-    }).eq('id', orderId).select().single();
+    }).eq('id', validOrderUuid).select().single();
 
     if (error || !data) return localDb.updateMemberPaymentStatus(orderId, paymentStatus);
 
-    const { data: itemsData } = await client.from('member_order_items').select('*').eq('order_id', orderId);
+    const { data: itemsData } = await client.from('member_order_items').select('*').eq('order_id', validOrderUuid);
     return {
       ...data,
       items: (itemsData || []) as MemberOrderItem[]
@@ -1185,20 +1213,27 @@ class SupabaseDatabase {
   async deleteMemberOrder(orderId: string): Promise<void> {
     const client = this.client;
     if (!client) return localDb.deleteMemberOrder(orderId);
-    const { data: ord } = await client.from('member_orders').select('session_id').eq('id', orderId).maybeSingle();
-    await client.from('member_orders').delete().eq('id', orderId);
-    if (ord?.session_id) {
-      await this.recalculateSessionOrderTotals(ord.session_id);
+    const validOrderUuid = toValidUuidOrNull(orderId);
+    if (validOrderUuid) {
+      const { data: ord } = await client.from('member_orders').select('session_id').eq('id', validOrderUuid).maybeSingle();
+      await client.from('member_orders').delete().eq('id', validOrderUuid);
+      if (ord?.session_id) {
+        await this.recalculateSessionOrderTotals(ord.session_id);
+      }
     }
+    await localDb.deleteMemberOrder(orderId);
   }
 
   private async recalculateSessionOrderTotals(sessionId: string) {
     const client = this.client;
     if (!client) return;
+    const validSessionUuid = toValidUuidOrNull(sessionId);
+    if (!validSessionUuid) return;
+
     const session = await this.getSessionById(sessionId);
     if (!session) return;
 
-    const { data: sessionOrders } = await client.from('member_orders').select('*').eq('session_id', sessionId).eq('status', 'submitted');
+    const { data: sessionOrders } = await client.from('member_orders').select('*').eq('session_id', validSessionUuid).eq('status', 'submitted');
     if (!sessionOrders || sessionOrders.length === 0) return;
 
     const memberCount = sessionOrders.length;
