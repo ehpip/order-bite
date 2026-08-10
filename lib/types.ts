@@ -66,6 +66,7 @@ export type MemberPaymentStatus = 'unpaid' | 'payment_reported' | 'paid';
 export interface OrderSession {
   id: string;
   host_id?: string;
+  host_identifier?: string;
   host_name?: string;
   store_id?: string;
   menu_snapshot_id: string;

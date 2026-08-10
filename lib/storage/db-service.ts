@@ -350,7 +350,7 @@ class LocalDatabase {
   async getSessions(hostId?: string): Promise<OrderSession[]> {
     let list = [...this.sessions];
     if (hostId) {
-      list = list.filter((s) => s.host_id === hostId);
+      list = list.filter((s) => s.host_identifier === hostId || s.host_id === hostId);
     }
     return list.sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -375,6 +375,7 @@ class LocalDatabase {
     payment_notes?: string;
     host_name?: string;
     host_id?: string;
+    host_identifier?: string;
   }): Promise<OrderSession> {
     let shareCode = generateShareCode(6);
     while (this.sessions.some((s) => s.share_code === shareCode)) {
@@ -384,7 +385,8 @@ class LocalDatabase {
     const now = new Date().toISOString();
     const newSession: OrderSession = {
       id: `session-${Date.now()}-${generateShareCode(4)}`,
-      host_id: sessionData.host_id || 'host-user',
+      host_id: sessionData.host_id,
+      host_identifier: sessionData.host_identifier || sessionData.host_id || 'host-user',
       host_name: sessionData.host_name || 'Group Order Host',
       store_id: sessionData.store_id,
       menu_snapshot_id: sessionData.snapshot_id,
@@ -404,27 +406,7 @@ class LocalDatabase {
     return newSession;
   }
 
-  async updateSession(id: string, updates: Partial<OrderSession>): Promise<OrderSession | null> {
-    const idx = this.sessions.findIndex((s) => s.id === id);
-    if (idx < 0) return null;
-
-    const updated = {
-      ...this.sessions[idx],
-      ...updates,
-      updated_at: new Date().toISOString(),
-    };
-    this.sessions[idx] = updated;
-
-    // Recalculate shipping shares if shipping_cost or method changed
-    if (updates.shipping_cost !== undefined || updates.shipping_split_method !== undefined) {
-      this.recalculateSessionOrderTotals(id);
-    }
-
-    this.persistAll();
-    return updated;
-  }
-
-  async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string): Promise<OrderSession | null> {
+  async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string, hostIdentifier?: string): Promise<OrderSession | null> {
     const original = await this.getSessionById(sessionId);
     if (!original) return null;
 
@@ -438,6 +420,7 @@ class LocalDatabase {
       payment_notes: original.payment_notes,
       host_name: original.host_name,
       host_id: hostId || original.host_id,
+      host_identifier: hostIdentifier || original.host_identifier || hostId || original.host_id,
     });
   }
 
@@ -946,7 +929,7 @@ class SupabaseDatabase {
     if (!client) return localSessions;
     let query = client.from('order_sessions').select('*');
     if (hostId) {
-      query = query.eq('host_id', hostId);
+      query = query.or(`host_identifier.eq.${hostId},host_id.eq.${hostId}`);
     }
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error || !data) {
@@ -989,6 +972,7 @@ class SupabaseDatabase {
     payment_notes?: string;
     host_name?: string;
     host_id?: string;
+    host_identifier?: string;
   }): Promise<OrderSession> {
     const localSession = await localDb.createSession(sessionData);
 
@@ -1003,6 +987,7 @@ class SupabaseDatabase {
 
     const { data, error } = await client.from('order_sessions').insert({
       host_id: toValidUuidOrNull(sessionData.host_id),
+      host_identifier: sessionData.host_identifier || sessionData.host_id || null,
       host_name: sessionData.host_name || 'Group Order Host',
       store_id: toValidUuidOrNull(sessionData.store_id),
       menu_snapshot_id: validMenuSnapshotUuid,
@@ -1030,6 +1015,7 @@ class SupabaseDatabase {
 
     const safeUpdates: any = { ...updates, updated_at: new Date().toISOString() };
     if ('host_id' in safeUpdates) safeUpdates.host_id = toValidUuidOrNull(safeUpdates.host_id);
+    if ('host_identifier' in safeUpdates) safeUpdates.host_identifier = safeUpdates.host_identifier ?? null;
     if ('store_id' in safeUpdates) safeUpdates.store_id = toValidUuidOrNull(safeUpdates.store_id);
     if ('menu_snapshot_id' in safeUpdates) safeUpdates.menu_snapshot_id = toValidUuidOrNull(safeUpdates.menu_snapshot_id);
 
@@ -1044,7 +1030,7 @@ class SupabaseDatabase {
     return data as OrderSession;
   }
 
-  async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string): Promise<OrderSession | null> {
+  async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string, hostIdentifier?: string): Promise<OrderSession | null> {
     const original = await this.getSessionById(sessionId);
     if (!original) return null;
     return this.createSession({
@@ -1057,6 +1043,7 @@ class SupabaseDatabase {
       payment_notes: original.payment_notes,
       host_name: original.host_name,
       host_id: hostId || original.host_id,
+      host_identifier: hostIdentifier || original.host_identifier || hostId || original.host_id,
     });
   }
 
@@ -1289,7 +1276,7 @@ class DatabaseService {
   getSessionById(id: string) { return this.activeDb.getSessionById(id); }
   createSession(sessionData: any) { return this.activeDb.createSession(sessionData); }
   updateSession(id: string, updates: any) { return this.activeDb.updateSession(id, updates); }
-  duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string) { return this.activeDb.duplicateSession(sessionId, newName, newDeadlineISO, hostId); }
+  duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string, hostIdentifier?: string) { return this.activeDb.duplicateSession(sessionId, newName, newDeadlineISO, hostId, hostIdentifier); }
   getOrdersForSession(sessionId: string) { return this.activeDb.getOrdersForSession(sessionId); }
   getOrderForMember(sessionId: string, memberId: string) { return this.activeDb.getOrderForMember(sessionId, memberId); }
   submitMemberOrder(params: any) { return this.activeDb.submitMemberOrder(params); }

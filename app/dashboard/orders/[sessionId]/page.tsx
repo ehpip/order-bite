@@ -88,7 +88,7 @@ export default function SessionManagementPage({ params }: { params: Promise<{ se
     if (!session || !isOwner) return;
     const newName = `${session.name} (Copy)`;
     const newDeadline = new Date(Date.now() + 45 * 60 * 1000).toISOString();
-    const newSess = await db.duplicateSession(session.id, newName, newDeadline, hostIdentifier);
+    const newSess = await db.duplicateSession(session.id, newName, newDeadline, hostIdentifier, hostIdentifier);
     if (newSess) {
       window.location.href = `/dashboard/orders/${newSess.id}?share=true`;
     }

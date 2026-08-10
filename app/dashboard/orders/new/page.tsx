@@ -112,6 +112,7 @@ export default function NewOrderSessionPage() {
         payment_notes: paymentNotes,
         host_name: hostName,
         host_id: hostIdentifier,
+        host_identifier: hostIdentifier,
       });
 
       // Redirect directly to host management dashboard with share popup trigger

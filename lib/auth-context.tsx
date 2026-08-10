@@ -200,9 +200,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hostIdentifier = user?.id || user?.email || deviceHostId;
 
-  const isHostOwner = (session: { host_id?: string } | null | undefined): boolean => {
-    if (!session || !session.host_id || !hostIdentifier) return false;
-    return session.host_id === hostIdentifier;
+  const isHostOwner = (session: { host_id?: string; host_identifier?: string } | null | undefined): boolean => {
+    if (!session || !hostIdentifier) return false;
+    if (session.host_identifier && session.host_identifier === hostIdentifier) return true;
+    if (session.host_id && session.host_id === hostIdentifier) return true;
+    return false;
   };
 
   return (
