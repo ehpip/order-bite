@@ -406,6 +406,25 @@ class LocalDatabase {
     return newSession;
   }
 
+  async updateSession(id: string, updates: Partial<OrderSession>): Promise<OrderSession | null> {
+    const idx = this.sessions.findIndex((s) => s.id === id);
+    if (idx < 0) return null;
+
+    const updated = {
+      ...this.sessions[idx],
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.sessions[idx] = updated;
+
+    if (updates.shipping_cost !== undefined || updates.shipping_split_method !== undefined) {
+      this.recalculateSessionOrderTotals(id);
+    }
+
+    this.persistAll();
+    return updated;
+  }
+
   async duplicateSession(sessionId: string, newName: string, newDeadlineISO: string, hostId?: string, hostIdentifier?: string): Promise<OrderSession | null> {
     const original = await this.getSessionById(sessionId);
     if (!original) return null;
