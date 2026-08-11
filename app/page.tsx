@@ -183,7 +183,7 @@ export default function HomePage() {
               href="/dashboard/stores"
               className="text-xs sm:text-sm font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1"
             >
-              Manage Stores <ArrowRight className="w-4 h-4" />
+              View All Stores <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
 

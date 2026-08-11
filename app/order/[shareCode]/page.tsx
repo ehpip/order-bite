@@ -1,14 +1,40 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, use } from 'react';
-import Link from 'next/link';
-import { ShoppingBag, Search, Plus, Minus, CheckCircle2, Clock, AlertTriangle, Lock, CreditCard, ChevronRight, Edit2, Utensils, Send, X } from 'lucide-react';
-import { db } from '@/lib/storage/db-service';
-import { OrderSession, MenuSnapshot, MenuSnapshotItem, MemberOrder } from '@/lib/types';
-import { formatCurrency, formatDate } from '@/lib/formatters';
-import CountdownBadge from '@/components/ui/countdown-badge';
+import React, { useEffect, useState, use } from "react";
+import Link from "next/link";
+import {
+  ShoppingBag,
+  Search,
+  Plus,
+  Minus,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Lock,
+  CreditCard,
+  ChevronRight,
+  Edit2,
+  Utensils,
+  Send,
+  X,
+  Check,
+  Copy,
+} from "lucide-react";
+import { db } from "@/lib/storage/db-service";
+import {
+  OrderSession,
+  MenuSnapshot,
+  MenuSnapshotItem,
+  MemberOrder,
+} from "@/lib/types";
+import { formatCurrency, formatDate } from "@/lib/formatters";
+import CountdownBadge from "@/components/ui/countdown-badge";
 
-export default function PublicMemberOrderPage({ params }: { params: Promise<{ shareCode: string }> }) {
+export default function PublicMemberOrderPage({
+  params,
+}: {
+  params: Promise<{ shareCode: string }>;
+}) {
   const { shareCode } = use(params);
 
   const [session, setSession] = useState<OrderSession | null>(null);
@@ -18,25 +44,88 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
   const [notFound, setNotFound] = useState(false);
 
   // Member Identity
-  const [memberName, setMemberName] = useState<string>('');
+  const [memberName, setMemberName] = useState<string>("");
   const [nameSubmitted, setNameSubmitted] = useState<boolean>(false);
 
   // Menu Search & Categories
-  const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'sold_out'>('all');
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [availabilityFilter, setAvailabilityFilter] = useState<
+    "all" | "available" | "sold_out"
+  >("all");
 
   // Cart State: Map of snapshot_item_id -> { quantity, notes }
-  const [cart, setCart] = useState<Map<string, { quantity: number; notes: string }>>(new Map());
+  const [cart, setCart] = useState<
+    Map<string, { quantity: number; notes: string }>
+  >(new Map());
 
   // UI Drawer/Modal
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const [copiedPayment, setCopiedPayment] = useState<string | null>(null);
+
   useEffect(() => {
     loadData();
   }, [shareCode]);
+
+  const PAYMENT_PROVIDERS = [
+    "BCA",
+    "BRI",
+    "BNI",
+    "Mandiri",
+    "BSI",
+    "CIMB",
+    "Permata",
+    "Danamon",
+    "OCBC",
+    "BTN",
+    "GoPay",
+    "OVO",
+    "DANA",
+    "ShopeePay",
+    "LinkAja",
+  ];
+
+  function parsePaymentInstructions(text: string) {
+    const results: {
+      provider: string;
+      number: string;
+    }[] = [];
+
+    const providerPattern = PAYMENT_PROVIDERS.join("|");
+
+    const regex = new RegExp(
+      `(${providerPattern})\\s*[:\\-]?\\s*(\\d{8,16})`,
+      "gi",
+    );
+
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      results.push({
+        provider: match[1],
+        number: match[2],
+      });
+    }
+
+    return results;
+  }
+
+  const handleCopyPayment = async (number: string) => {
+    try {
+      await navigator.clipboard.writeText(number);
+
+      setCopiedPayment(number);
+
+      setTimeout(() => {
+        setCopiedPayment(null);
+      }, 2000);
+    } catch {
+      alert("Failed to copy payment number.");
+    }
+  };
 
   async function loadData() {
     const sess = await db.getSessionByShareCode(shareCode);
@@ -68,7 +157,9 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
       if (!order && savedName) {
         const sessionOrders = await db.getOrdersForSession(sess.id);
         const match = sessionOrders.find(
-          (o) => o.member_name.trim().toLowerCase() === savedName.trim().toLowerCase()
+          (o) =>
+            o.member_name.trim().toLowerCase() ===
+            savedName.trim().toLowerCase(),
         );
         if (match) {
           order = match;
@@ -82,10 +173,16 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
         const newCart = new Map<string, { quantity: number; notes: string }>();
         order.items.forEach((item) => {
           const match = items.find(
-            (si) => String(si.id) === String(item.snapshot_item_id) || si.name.trim().toLowerCase() === item.item_name.trim().toLowerCase()
+            (si) =>
+              String(si.id) === String(item.snapshot_item_id) ||
+              si.name.trim().toLowerCase() ===
+                item.item_name.trim().toLowerCase(),
           );
           const key = match ? match.id : item.snapshot_item_id;
-          newCart.set(key, { quantity: item.quantity, notes: item.notes || '' });
+          newCart.set(key, {
+            quantity: item.quantity,
+            notes: item.notes || "",
+          });
         });
         setCart(newCart);
       }
@@ -102,7 +199,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
     // Check if an order already exists for this member name in this session
     const sessionOrders = await db.getOrdersForSession(session.id);
     const existingForName = sessionOrders.find(
-      (o) => o.member_name.trim().toLowerCase() === trimmedName.toLowerCase()
+      (o) => o.member_name.trim().toLowerCase() === trimmedName.toLowerCase(),
     );
 
     if (existingForName) {
@@ -111,10 +208,13 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
       const newCart = new Map<string, { quantity: number; notes: string }>();
       existingForName.items.forEach((item) => {
         const match = snapshotItems.find(
-          (si) => String(si.id) === String(item.snapshot_item_id) || si.name.trim().toLowerCase() === item.item_name.trim().toLowerCase()
+          (si) =>
+            String(si.id) === String(item.snapshot_item_id) ||
+            si.name.trim().toLowerCase() ===
+              item.item_name.trim().toLowerCase(),
         );
         const key = match ? match.id : item.snapshot_item_id;
-        newCart.set(key, { quantity: item.quantity, notes: item.notes || '' });
+        newCart.set(key, { quantity: item.quantity, notes: item.notes || "" });
       });
       setCart(newCart);
     } else if (!memberId) {
@@ -127,9 +227,13 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
   };
 
   const updateQuantity = (itemId: string, delta: number) => {
-    const targetItem = snapshotItems.find((i) => String(i.id) === String(itemId));
+    const targetItem = snapshotItems.find(
+      (i) => String(i.id) === String(itemId),
+    );
     if (delta > 0 && targetItem && targetItem.is_available === false) {
-      alert(`Sorry, "${targetItem.name}" is currently sold out and unavailable to order.`);
+      alert(
+        `Sorry, "${targetItem.name}" is currently sold out and unavailable to order.`,
+      );
       return;
     }
 
@@ -142,7 +246,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
       }
     }
 
-    const current = newCart.get(keyToUse) || { quantity: 0, notes: '' };
+    const current = newCart.get(keyToUse) || { quantity: 0, notes: "" };
     const newQty = Math.max(0, current.quantity + delta);
 
     if (newQty === 0) {
@@ -162,7 +266,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
         break;
       }
     }
-    const current = newCart.get(keyToUse) || { quantity: 1, notes: '' };
+    const current = newCart.get(keyToUse) || { quantity: 1, notes: "" };
     newCart.set(keyToUse, { ...current, notes });
     setCart(newCart);
   };
@@ -179,6 +283,60 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
     }
   });
 
+  const hasUnsavedChanges = React.useMemo(() => {
+    // No submitted order yet.
+    // Any cart item means there is something to submit.
+    if (!existingOrder) {
+      return totalCartItemsCount > 0;
+    }
+
+    const submittedItems = new Map<
+      string,
+      {
+        quantity: number;
+        notes: string;
+      }
+    >();
+
+    existingOrder.items.forEach((item) => {
+      const match = snapshotItems.find(
+        (si) =>
+          String(si.id) === String(item.snapshot_item_id) ||
+          si.name.trim().toLowerCase() === item.item_name.trim().toLowerCase(),
+      );
+
+      const key = match ? String(match.id) : String(item.snapshot_item_id);
+
+      submittedItems.set(key, {
+        quantity: item.quantity,
+        notes: item.notes || "",
+      });
+    });
+
+    // Different number of item types
+    if (cart.size !== submittedItems.size) {
+      return true;
+    }
+
+    // Compare current cart against submitted order
+    for (const [itemId, cartItem] of cart.entries()) {
+      const submittedItem = submittedItems.get(String(itemId));
+
+      if (!submittedItem) {
+        return true;
+      }
+
+      if (
+        submittedItem.quantity !== cartItem.quantity ||
+        submittedItem.notes.trim() !== cartItem.notes.trim()
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [cart, existingOrder, snapshotItems, totalCartItemsCount]);
+
   const handleSubmitOrder = async () => {
     if (!session || !memberName.trim() || totalCartItemsCount === 0) return;
 
@@ -192,16 +350,23 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
     });
 
     if (unavailableInCart.length > 0) {
-      alert(`The following item(s) are sold out and cannot be ordered: ${unavailableInCart.join(', ')}. Please remove them from your cart.`);
+      alert(
+        `The following item(s) are sold out and cannot be ordered: ${unavailableInCart.join(", ")}. Please remove them from your cart.`,
+      );
       return;
     }
 
     try {
       setSubmitting(true);
-      const memberId = localStorage.getItem(`member_id_${session.id}`) || `mem-${Date.now()}`;
+
+      const memberId =
+        localStorage.getItem(`member_id_${session.id}`) || `mem-${Date.now()}`;
 
       const reqItems = Array.from(cart.entries()).map(([itemId, val]) => {
-        const match = snapshotItems.find((i) => String(i.id) === String(itemId));
+        const match = snapshotItems.find(
+          (i) => String(i.id) === String(itemId),
+        );
+
         return {
           snapshot_item_id: match ? match.id : itemId,
           quantity: val.quantity,
@@ -218,11 +383,23 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
 
       setExistingOrder(submittedOrder);
       setCheckoutOpen(false);
-      setSuccessMessage('Order saved successfully!');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      setSuccessMessage("Your order has been submitted successfully!");
+
+      // Reload the submitted order/cart state first
       await loadData();
+
+      // Scroll to the top so the member immediately sees
+      // their confirmed order and payment instructions.
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
     } catch (err: any) {
-      alert(err.message || 'Failed to submit order.');
+      alert(err.message || "Failed to submit order.");
     } finally {
       setSubmitting(false);
     }
@@ -230,7 +407,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
 
   const handleReportPayment = async () => {
     if (!existingOrder) return;
-    await db.updateMemberPaymentStatus(existingOrder.id, 'payment_reported');
+    await db.updateMemberPaymentStatus(existingOrder.id, "payment_reported");
     loadData();
   };
 
@@ -241,12 +418,21 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
           <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto font-bold text-lg">
             !
           </div>
-          <h2 className="text-lg font-bold text-slate-900">Group Order Session Not Found</h2>
+          <h2 className="text-lg font-bold text-slate-900">
+            Group Order Session Not Found
+          </h2>
           <p className="text-xs text-slate-600 leading-relaxed">
-            We couldn&apos;t find a group order session with share code <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-slate-800 font-semibold">{shareCode}</code>.
-            Please verify the link with the group order host or create a new session.
+            We couldn&apos;t find a group order session with share code{" "}
+            <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-slate-800 font-semibold">
+              {shareCode}
+            </code>
+            . Please verify the link with the group order host or create a new
+            session.
           </p>
-          <Link href="/" className="inline-block bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition-colors">
+          <Link
+            href="/"
+            className="inline-block bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition-colors"
+          >
             Back to Home
           </Link>
         </div>
@@ -258,31 +444,41 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 text-slate-500 text-sm flex-col gap-3">
         <div className="w-7 h-7 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
-        <span className="font-medium text-slate-600">Loading group order session...</span>
+        <span className="font-medium text-slate-600">
+          Loading group order session...
+        </span>
       </div>
     );
   }
 
   const isExpired = new Date(session.deadline).getTime() < Date.now();
-  const isClosed = session.status === 'closed' || isExpired;
+  const isClosed = session.status === "closed" || isExpired;
 
   // Extract Categories
-  const categoryNames = Array.from(new Set(snapshotItems.map((i) => i.category_name || 'General')));
+  const categoryNames = Array.from(
+    new Set(snapshotItems.map((i) => i.category_name || "General")),
+  );
 
-  const availableCount = snapshotItems.filter((i) => i.is_available !== false).length;
-  const soldOutCount = snapshotItems.filter((i) => i.is_available === false).length;
+  const availableCount = snapshotItems.filter(
+    (i) => i.is_available !== false,
+  ).length;
+  const soldOutCount = snapshotItems.filter(
+    (i) => i.is_available === false,
+  ).length;
 
   const filteredItems = snapshotItems.filter((item) => {
     const isAvailable = item.is_available !== false;
     const matchesAvailability =
-      availabilityFilter === 'all' ||
-      (availabilityFilter === 'available' && isAvailable) ||
-      (availabilityFilter === 'sold_out' && !isAvailable);
+      availabilityFilter === "all" ||
+      (availabilityFilter === "available" && isAvailable) ||
+      (availabilityFilter === "sold_out" && !isAvailable);
 
-    const matchesCat = selectedCategory === 'All' || item.category_name === selectedCategory;
+    const matchesCat =
+      selectedCategory === "All" || item.category_name === selectedCategory;
     const matchesSearch =
       item.name.toLowerCase().includes(search.toLowerCase()) ||
-      (item.description && item.description.toLowerCase().includes(search.toLowerCase()));
+      (item.description &&
+        item.description.toLowerCase().includes(search.toLowerCase()));
 
     return matchesAvailability && matchesCat && matchesSearch;
   });
@@ -297,14 +493,17 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
               <Utensils className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-bold text-sm text-slate-900 leading-snug line-clamp-1">{session.name}</h1>
-              <p className="text-[11px] text-slate-500">{snapshot?.store_name || 'Group Food Order'}</p>
+              <h1 className="font-bold text-sm text-slate-900 leading-snug line-clamp-1">
+                {session.name}
+              </h1>
+              <p className="text-[11px] text-slate-500">
+                {snapshot?.store_name || "Group Food Order"}
+              </p>
             </div>
           </div>
           <CountdownBadge deadlineISO={session.deadline} isClosed={isClosed} />
         </div>
       </header>
-
       {/* Main Container */}
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         {/* Step 1: Member Name Prompt Modal or Card */}
@@ -314,9 +513,12 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
               <Utensils className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900">Join Group Food Order</h2>
+              <h2 className="text-xl font-bold text-slate-900">
+                Join Group Food Order
+              </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Ordering from <strong>{snapshot?.store_name}</strong>. Enter your name to view the menu and pick your food!
+                Ordering from <strong>{snapshot?.store_name}</strong>. Enter
+                your name to view the menu and pick your food!
               </p>
             </div>
 
@@ -350,40 +552,124 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
             {existingOrder && (
               <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    Your Order Confirmed ({existingOrder.member_name})
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+
+                    <div>
+                      <div className="text-sm font-extrabold text-emerald-900">
+                        Order Submitted Successfully
+                      </div>
+
+                      <div className="text-[11px] text-emerald-700">
+                        Hi {existingOrder.member_name}, your order has been
+                        recorded.
+                      </div>
+                    </div>
+                  </div>
                   <span className="text-xs font-extrabold text-emerald-900">
                     {formatCurrency(existingOrder.grand_total)}
                   </span>
                 </div>
 
-                <div className="text-xs text-emerald-800 space-y-1 bg-white/80 p-2.5 rounded-xl">
+                <div className="text-sm text-emerald-800 space-y-2 bg-white/80 p-2.5 rounded-xl">
                   {existingOrder.items.map((it, idx) => (
                     <div key={idx} className="flex justify-between">
-                      <span>{it.quantity}x {it.item_name}</span>
-                      <span className="font-semibold">{formatCurrency(it.subtotal)}</span>
+                      <span>
+                        - {it.quantity}x {it.item_name}
+                      </span>
+                      <span className="font-semibold">
+                        {formatCurrency(it.subtotal)}
+                      </span>
                     </div>
                   ))}
                 </div>
 
                 {/* Payment instructions */}
                 {session.payment_notes && (
-                  <div className="text-[11px] text-emerald-900 pt-1">
-                    💳 Transfer: <strong>{session.payment_notes}</strong>
+                  <div className="bg-white border-2 border-emerald-300 rounded-2xl p-4 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
+                        <CreditCard className="w-5 h-5 text-emerald-700" />
+                      </div>
+
+                      <div>
+                        <div className="text-sm font-extrabold text-emerald-900">
+                          Payment Instructions
+                        </div>
+
+                        <div className="text-[11px] font-medium text-emerald-700">
+                          Please transfer your payment to:
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Original payment instructions */}
+                    <div className="text-sm font-semibold text-slate-700 leading-relaxed">
+                      {session.payment_notes}
+                    </div>
+
+                    {/* Detected payment numbers */}
+                    {parsePaymentInstructions(session.payment_notes).length >
+                      0 && (
+                      <div className="space-y-2 pt-2 border-t border-emerald-100">
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                          Quick Copy
+                        </div>
+
+                        {parsePaymentInstructions(session.payment_notes).map(
+                          ({ provider, number }) => (
+                            <div
+                              key={`${provider}-${number}`}
+                              className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3"
+                            >
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-bold text-slate-500">
+                                  {provider}
+                                </div>
+
+                                <div className="text-base font-extrabold tracking-wide text-slate-900">
+                                  {number}
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleCopyPayment(number)}
+                                className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                                  copiedPayment === number
+                                    ? "bg-emerald-600 text-white"
+                                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                                }`}
+                              >
+                                {copiedPayment === number ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5" />
+                                    Copied
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3.5 h-3.5" />
+                                    Copy
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 <div className="flex items-center gap-2 pt-1">
-                  {existingOrder.payment_status === 'unpaid' ? (
+                  {existingOrder.payment_status === "unpaid" ? (
                     <button
                       onClick={handleReportPayment}
                       className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs py-2 rounded-xl transition-colors text-center cursor-pointer"
                     >
                       I&apos;ve Paid
                     </button>
-                  ) : existingOrder.payment_status === 'payment_reported' ? (
+                  ) : existingOrder.payment_status === "payment_reported" ? (
                     <span className="flex-1 bg-amber-100 text-amber-800 font-bold text-xs py-1.5 rounded-xl text-center">
                       ⏳ Payment Reported (Host verifying)
                     </span>
@@ -400,7 +686,10 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
             {isClosed && (
               <div className="bg-slate-800 text-white p-3.5 rounded-2xl text-xs flex items-center gap-2">
                 <Lock className="w-4 h-4 text-orange-400 shrink-0" />
-                <span><strong>Ordering is Closed.</strong> This session is no longer accepting new food orders or changes.</span>
+                <span>
+                  <strong>Ordering is Closed.</strong> This session is no longer
+                  accepting new food orders or changes.
+                </span>
               </div>
             )}
 
@@ -419,9 +708,11 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
 
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                 <button
-                  onClick={() => setSelectedCategory('All')}
+                  onClick={() => setSelectedCategory("All")}
                   className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer ${
-                    selectedCategory === 'All' ? 'bg-orange-600 text-white' : 'bg-slate-100 text-slate-700'
+                    selectedCategory === "All"
+                      ? "bg-orange-600 text-white"
+                      : "bg-slate-100 text-slate-700"
                   }`}
                 >
                   All Categories
@@ -431,7 +722,9 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                     key={idx}
                     onClick={() => setSelectedCategory(cat)}
                     className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer ${
-                      selectedCategory === cat ? 'bg-orange-600 text-white' : 'bg-slate-100 text-slate-700'
+                      selectedCategory === cat
+                        ? "bg-orange-600 text-white"
+                        : "bg-slate-100 text-slate-700"
                     }`}
                   >
                     {cat}
@@ -442,27 +735,35 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
               {/* Availability Filter Pills */}
               {soldOutCount > 0 && (
                 <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100 text-[11px]">
-                  <span className="text-slate-400 font-semibold mr-1">Status:</span>
+                  <span className="text-slate-400 font-semibold mr-1">
+                    Status:
+                  </span>
                   <button
-                    onClick={() => setAvailabilityFilter('all')}
+                    onClick={() => setAvailabilityFilter("all")}
                     className={`px-2.5 py-0.5 rounded-lg font-bold transition-colors cursor-pointer ${
-                      availabilityFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+                      availabilityFilter === "all"
+                        ? "bg-slate-800 text-white"
+                        : "bg-slate-100 text-slate-600"
                     }`}
                   >
                     All ({snapshotItems.length})
                   </button>
                   <button
-                    onClick={() => setAvailabilityFilter('available')}
+                    onClick={() => setAvailabilityFilter("available")}
                     className={`px-2.5 py-0.5 rounded-lg font-bold transition-colors cursor-pointer ${
-                      availabilityFilter === 'available' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      availabilityFilter === "available"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                     }`}
                   >
                     Available ({availableCount})
                   </button>
                   <button
-                    onClick={() => setAvailabilityFilter('sold_out')}
+                    onClick={() => setAvailabilityFilter("sold_out")}
                     className={`px-2.5 py-0.5 rounded-lg font-bold transition-colors cursor-pointer ${
-                      availabilityFilter === 'sold_out' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      availabilityFilter === "sold_out"
+                        ? "bg-rose-600 text-white"
+                        : "bg-rose-50 text-rose-700 border border-rose-200"
                     }`}
                   >
                     Sold Out ({soldOutCount})
@@ -479,7 +780,11 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                 </div>
               ) : (
                 filteredItems.map((item) => {
-                  const cartVal = cart.get(item.id) || Array.from(cart.entries()).find(([k]) => String(k) === String(item.id))?.[1];
+                  const cartVal =
+                    cart.get(item.id) ||
+                    Array.from(cart.entries()).find(
+                      ([k]) => String(k) === String(item.id),
+                    )?.[1];
                   const quantity = cartVal?.quantity || 0;
                   const isAvailable = item.is_available !== false;
 
@@ -487,7 +792,9 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                     <div
                       key={item.id}
                       className={`p-4 rounded-2xl border shadow-2xs flex gap-3.5 items-center justify-between transition-colors ${
-                        isAvailable ? 'bg-white border-slate-200' : 'bg-slate-50/80 border-slate-200/80 opacity-80'
+                        isAvailable
+                          ? "bg-white border-slate-200"
+                          : "bg-slate-50/80 border-slate-200/80 opacity-80"
                       }`}
                     >
                       {item.image && (
@@ -496,7 +803,7 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                             src={item.image}
                             alt={item.name}
                             className={`w-20 h-20 rounded-xl object-cover border shrink-0 ${
-                              !isAvailable ? 'grayscale opacity-75' : ''
+                              !isAvailable ? "grayscale opacity-75" : ""
                             }`}
                           />
                           {!isAvailable && (
@@ -511,7 +818,9 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
 
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className={`font-bold text-sm line-clamp-1 ${isAvailable ? 'text-slate-900' : 'text-slate-500 line-through'}`}>
+                          <h3
+                            className={`font-bold text-sm line-clamp-1 ${isAvailable ? "text-slate-900" : "text-slate-500 line-through"}`}
+                          >
                             {item.name}
                           </h3>
                           {isAvailable ? (
@@ -524,8 +833,12 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-slate-500 line-clamp-2">{item.description}</p>
-                        <div className={`text-sm font-extrabold ${isAvailable ? 'text-orange-600' : 'text-slate-400'}`}>
+                        <p className="text-xs text-slate-500 line-clamp-2">
+                          {item.description}
+                        </p>
+                        <div
+                          className={`text-sm font-extrabold ${isAvailable ? "text-orange-600" : "text-slate-400"}`}
+                        >
                           {formatCurrency(item.price)}
                         </div>
 
@@ -533,8 +846,10 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                         {quantity > 0 && isAvailable && (
                           <input
                             type="text"
-                            value={cartVal?.notes || ''}
-                            onChange={(e) => updateItemNotes(item.id, e.target.value)}
+                            value={cartVal?.notes || ""}
+                            onChange={(e) =>
+                              updateItemNotes(item.id, e.target.value)
+                            }
                             placeholder="Note: e.g. Less ice, extra spicy"
                             className="w-full px-2 py-1 text-[11px] border border-slate-200 rounded-lg outline-hidden focus:border-orange-500 bg-slate-50"
                           />
@@ -566,7 +881,9 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
-                              <span className="font-bold text-xs text-slate-900 w-5 text-center">{quantity}</span>
+                              <span className="font-bold text-xs text-slate-900 w-5 text-center">
+                                {quantity}
+                              </span>
                               <button
                                 onClick={() => updateQuantity(item.id, 1)}
                                 className="w-7 h-7 rounded-lg bg-orange-600 text-white font-bold flex items-center justify-center shadow-2xs hover:bg-orange-700 cursor-pointer"
@@ -591,20 +908,36 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 shadow-lg z-40">
           <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
             <div>
-              <div className="text-xs text-slate-500 font-medium">Your Order ({totalCartItemsCount} items)</div>
-              <div className="text-base font-extrabold text-slate-900">{formatCurrency(cartFoodSubtotal)}</div>
+              <div className="text-xs text-slate-500 font-medium">
+                {!existingOrder
+                  ? `Your Order (${totalCartItemsCount} items)`
+                  : hasUnsavedChanges
+                    ? "Unsaved Changes"
+                    : "Order Submitted"}
+              </div>
+
+              <div className="text-base font-extrabold text-slate-900">
+                {formatCurrency(cartFoodSubtotal)}
+              </div>
             </div>
 
-            <button
-              onClick={() => setCheckoutOpen(true)}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl text-sm shadow-md flex items-center gap-2 transition-colors cursor-pointer"
-            >
-              Review & Submit <ChevronRight className="w-4 h-4" />
-            </button>
+            {existingOrder && !hasUnsavedChanges ? (
+              <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-5 py-3 rounded-xl text-sm">
+                <CheckCircle2 className="w-4 h-4" />
+                Order Submitted
+              </div>
+            ) : (
+              <button
+                onClick={() => setCheckoutOpen(true)}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl text-sm shadow-md flex items-center gap-2 transition-colors cursor-pointer"
+              >
+                {existingOrder ? "Update Order" : "Review & Submit"}
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       )}
-
       {/* Checkout Review Drawer / Modal */}
       {checkoutOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
@@ -616,26 +949,45 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="font-bold text-slate-900 text-base">Review Your Order</h3>
+            <h3 className="font-bold text-slate-900 text-base">
+              {existingOrder ? "Review Order Changes" : "Review Your Order"}
+            </h3>
 
             <div className="space-y-4 py-2">
               <div className="bg-slate-50 p-3 rounded-xl text-xs font-semibold text-slate-700 flex justify-between">
-                <span>Ordering for: <strong>{memberName}</strong></span>
-                <span>Store: <strong>{snapshot?.store_name}</strong></span>
+                <span>
+                  Ordering for: <strong>{memberName}</strong>
+                </span>
+                <span>
+                  Store: <strong>{snapshot?.store_name}</strong>
+                </span>
               </div>
 
               <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
                 {Array.from(cart.entries()).map(([itemId, val]) => {
-                  const item = snapshotItems.find((i) => String(i.id) === String(itemId));
+                  const item = snapshotItems.find(
+                    (i) => String(i.id) === String(itemId),
+                  );
                   if (!item) return null;
 
                   return (
-                    <div key={itemId} className="py-2.5 flex items-center justify-between text-xs">
+                    <div
+                      key={itemId}
+                      className="py-2.5 flex items-center justify-between text-xs"
+                    >
                       <div>
-                        <div className="font-bold text-slate-900">{val.quantity}x {item.name}</div>
-                        {val.notes && <div className="text-[11px] text-slate-500 italic">Note: {val.notes}</div>}
+                        <div className="font-bold text-slate-900">
+                          {val.quantity}x {item.name}
+                        </div>
+                        {val.notes && (
+                          <div className="text-[11px] text-slate-500 italic">
+                            Note: {val.notes}
+                          </div>
+                        )}
                       </div>
-                      <div className="font-semibold text-slate-800">{formatCurrency(item.price * val.quantity)}</div>
+                      <div className="font-semibold text-slate-800">
+                        {formatCurrency(item.price * val.quantity)}
+                      </div>
                     </div>
                   );
                 })}
@@ -644,10 +996,14 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
               <div className="pt-3 border-t border-slate-200 space-y-1.5 text-xs text-slate-600">
                 <div className="flex justify-between">
                   <span>Food Subtotal</span>
-                  <span className="font-semibold text-slate-800">{formatCurrency(cartFoodSubtotal)}</span>
+                  <span className="font-semibold text-slate-800">
+                    {formatCurrency(cartFoodSubtotal)}
+                  </span>
                 </div>
                 <div className="flex justify-between text-slate-500">
-                  <span>Shipping Allocation ({session.shipping_split_method})</span>
+                  <span>
+                    Shipping Allocation ({session.shipping_split_method})
+                  </span>
                   <span>Calculated by host</span>
                 </div>
               </div>
@@ -657,7 +1013,13 @@ export default function PublicMemberOrderPage({ params }: { params: Promise<{ sh
                 disabled={submitting}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-md transition-colors cursor-pointer"
               >
-                {submitting ? 'Submitting Order...' : `Confirm & Place Order (${formatCurrency(cartFoodSubtotal)})`}
+                {submitting
+                  ? existingOrder
+                    ? "Updating Order..."
+                    : "Submitting Order..."
+                  : existingOrder
+                    ? `Confirm & Update Order (${formatCurrency(cartFoodSubtotal)})`
+                    : `Confirm & Place Order (${formatCurrency(cartFoodSubtotal)})`}
               </button>
             </div>
           </div>
