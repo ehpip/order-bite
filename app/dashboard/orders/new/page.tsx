@@ -19,7 +19,7 @@ import { useAuth } from "@/lib/auth-context";
 
 export default function NewOrderSessionPage() {
   const router = useRouter();
-  const { user, hostIdentifier } = useAuth();
+  const { user, hostIdentifier, isAuthenticated } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -130,7 +130,7 @@ export default function NewOrderSessionPage() {
         shipping_split_method: shippingSplitMethod,
         payment_notes: paymentNotes,
         host_name: hostName,
-        host_id: hostIdentifier,
+        host_id: isAuthenticated ? user?.id : undefined,
         host_identifier: hostIdentifier,
       });
 

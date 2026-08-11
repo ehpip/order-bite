@@ -15,6 +15,7 @@ export interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   hostIdentifier: string;
+  isAuthenticated: boolean;
   isAdmin: boolean;
   isLoading: boolean;
   loginWithGoogle: () => Promise<void>;
@@ -27,6 +28,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   hostIdentifier: '',
+  isAuthenticated: false,
   isAdmin: false,
   isLoading: true,
   loginWithGoogle: async () => {},
@@ -198,7 +200,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const hostIdentifier = user?.id || user?.email || deviceHostId;
+  const isAuthenticated = Boolean(user?.id);
+  const hostIdentifier = user?.id || deviceHostId;
 
   const isHostOwner = (session: { host_id?: string; host_identifier?: string } | null | undefined): boolean => {
     if (!session || !hostIdentifier) return false;
@@ -212,6 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         hostIdentifier,
+        isAuthenticated,
         isAdmin,
         isLoading,
         loginWithGoogle,

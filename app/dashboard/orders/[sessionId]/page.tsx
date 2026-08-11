@@ -15,7 +15,7 @@ import { useAuth } from '@/lib/auth-context';
 export default function SessionManagementPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
   const searchParams = useSearchParams();
-  const { user, hostIdentifier, isHostOwner, isLoading: authLoading } = useAuth();
+  const { user, hostIdentifier, isHostOwner, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [session, setSession] = useState<OrderSession | null>(null);
   const [snapshot, setSnapshot] = useState<MenuSnapshot | null>(null);
@@ -88,7 +88,13 @@ export default function SessionManagementPage({ params }: { params: Promise<{ se
     if (!session || !isOwner) return;
     const newName = `${session.name} (Copy)`;
     const newDeadline = new Date(Date.now() + 45 * 60 * 1000).toISOString();
-    const newSess = await db.duplicateSession(session.id, newName, newDeadline, hostIdentifier, hostIdentifier);
+    const newSess = await db.duplicateSession(
+      session.id,
+      newName,
+      newDeadline,
+      isAuthenticated ? user?.id : undefined,
+      hostIdentifier
+    );
     if (newSess) {
       window.location.href = `/dashboard/orders/${newSess.id}?share=true`;
     }
