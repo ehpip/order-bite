@@ -546,7 +546,11 @@ export default function PublicMemberOrderPage({
               </div>
             </div>
 
-            {allOrders.length === 0 ? (
+            {!nameSubmitted ? (
+              <div className="text-center py-3 text-[11px] text-slate-400">
+                Enter your name to see who joined and their orders
+              </div>
+            ) : allOrders.length === 0 ? (
               <div className="text-center py-4 text-xs text-slate-400">
                 <Users className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
                 Be the first to join this order!
@@ -627,7 +631,7 @@ export default function PublicMemberOrderPage({
               </div>
             )}
 
-            {allOrders.length > 0 && (
+            {nameSubmitted && allOrders.length > 0 && (
               <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-600">
                 <span>
                   Total Collected ({allOrders.filter(

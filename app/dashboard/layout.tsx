@@ -9,7 +9,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {children}
       </main>
       <footer className="bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-500">
-        <p>© 2026 OrderBite — Group Food Ordering Web App. Built with Next.js & Supabase.</p>
+        <p>© 2026 OrderBite — Group Food Ordering Web App. All rights reserved.</p>
       </footer>
     </div>
   );
