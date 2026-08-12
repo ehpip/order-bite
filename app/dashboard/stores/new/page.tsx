@@ -115,7 +115,7 @@ export default function NewStorePage() {
           <input
             type="text"
             {...register('name')}
-            placeholder="e.g. McDonald's, Kopi Kenangan, Warung Padang"
+            placeholder="e.g. TamrLatte, Point Coffee, Tuku"
             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600 focus:ring-1 focus:ring-orange-600"
           />
           {errors.name && <p className="text-xs text-rose-600 mt-1">{errors.name.message}</p>}
