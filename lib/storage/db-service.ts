@@ -617,8 +617,10 @@ class LocalDatabase {
       member_name: params.member_name,
       items: orderItems,
       food_subtotal: foodSubtotal,
-      shipping_share: 0, // Calculated during recalculateSessionOrderTotals
+      shipping_share: 0,
       grand_total: foodSubtotal,
+      amount_paid:
+        paymentStatus === "unpaid" ? undefined : previousOrder?.amount_paid,
       payment_status: paymentStatus,
       payment_reset_notice: paymentResetNotice,
       status: "submitted",
@@ -646,14 +648,19 @@ class LocalDatabase {
     const idx = this.orders.findIndex((o) => o.id === orderId);
     if (idx < 0) return null;
 
+    const wasLocked = this.orders[idx].payment_status !== "unpaid";
+    const isNowLocked = paymentStatus !== "unpaid";
+
+    if (isNowLocked && !wasLocked) {
+      this.orders[idx].amount_paid = this.orders[idx].grand_total;
+    } else if (!isNowLocked && wasLocked) {
+      this.orders[idx].amount_paid = undefined;
+    }
+
     this.orders[idx].payment_status = paymentStatus;
     this.orders[idx].payment_reset_notice = false;
     this.orders[idx].updated_at = new Date().toISOString();
 
-    // Locking (unpaid -> reported/paid) freezes this order's current totals
-    // automatically, since recalculateSessionOrderTotals now skips locked
-    // orders. Unlocking (reverting to unpaid) needs a recalc so the order
-    // rejoins the shared shipping pool.
     this.recalculateSessionOrderTotals(this.orders[idx].session_id);
     this.persistAll();
     return this.orders[idx];
@@ -1567,6 +1574,10 @@ class SupabaseDatabase {
           member_name: params.member_name,
           food_subtotal: foodSubtotal,
           grand_total: foodSubtotal,
+          amount_paid:
+            paymentStatus === "unpaid"
+              ? null
+              : (existingOrder.amount_paid ?? null),
           payment_status: paymentStatus,
           payment_reset_notice: paymentResetNotice,
           status: "submitted",
@@ -1588,6 +1599,7 @@ class SupabaseDatabase {
           food_subtotal: foodSubtotal,
           shipping_share: 0,
           grand_total: foodSubtotal,
+          amount_paid: null,
           payment_status: "unpaid",
           payment_reset_notice: false,
           status: "submitted",
@@ -1624,11 +1636,30 @@ class SupabaseDatabase {
     if (!validOrderUuid)
       return localDb.updateMemberPaymentStatus(orderId, paymentStatus);
 
+    const { data: existing, error: fetchErr } = await client
+      .from("member_orders")
+      .select("*")
+      .eq("id", validOrderUuid)
+      .maybeSingle();
+    if (fetchErr || !existing)
+      return localDb.updateMemberPaymentStatus(orderId, paymentStatus);
+
+    const wasLocked = existing.payment_status !== "unpaid";
+    const isNowLocked = paymentStatus !== "unpaid";
+    let amountPaidValue: number | null = existing.amount_paid ?? null;
+
+    if (isNowLocked && !wasLocked) {
+      amountPaidValue = Number(existing.grand_total);
+    } else if (!isNowLocked && wasLocked) {
+      amountPaidValue = null;
+    }
+
     const { data, error } = await client
       .from("member_orders")
       .update({
         payment_status: paymentStatus,
         payment_reset_notice: false,
+        amount_paid: amountPaidValue,
         updated_at: new Date().toISOString(),
       })
       .eq("id", validOrderUuid)
@@ -1638,8 +1669,6 @@ class SupabaseDatabase {
     if (error || !data)
       return localDb.updateMemberPaymentStatus(orderId, paymentStatus);
 
-    // Locking freezes this order's current totals automatically (recalc
-    // skips locked orders). Unlocking needs a recalc so it rejoins the pool.
     await this.recalculateSessionOrderTotals(data.session_id);
 
     const { data: itemsData } = await client
@@ -1838,3 +1867,92 @@ class DatabaseService {
 }
 
 export const db = new DatabaseService();
+
+export interface EnrichedOrder extends MemberOrder {
+  current_fair_total: number;
+  current_fair_shipping_share: number;
+  overpaid_amount: number;
+}
+
+export interface EnrichedSessionSummary {
+  total_overpaid: number;
+  total_underpaid: number;
+  enriched_orders: EnrichedOrder[];
+}
+
+export function enrichOrdersWithOverpayment(
+  session: OrderSession,
+  orders: MemberOrder[],
+): EnrichedSessionSummary {
+  const submitted = orders.filter((o) => o.status === "submitted");
+  if (submitted.length === 0) {
+    return {
+      total_overpaid: 0,
+      total_underpaid: 0,
+      enriched_orders: [],
+    };
+  }
+
+  const totalFoodAll = submitted.reduce(
+    (sum, o) => sum + Number(o.food_subtotal),
+    0,
+  );
+  const shippingCost = Number(session.shipping_cost) || 0;
+  const splitMethod = session.shipping_split_method;
+
+  const fairShippingByOrderId = new Map<string, number>();
+
+  submitted.forEach((order) => {
+    let fairShare = 0;
+    if (splitMethod === "equal") {
+      fairShare = Math.round(shippingCost / submitted.length);
+    } else if (splitMethod === "proportional") {
+      fairShare =
+        totalFoodAll > 0
+          ? Math.round(
+              (Number(order.food_subtotal) / totalFoodAll) * shippingCost,
+            )
+          : 0;
+    } else {
+      fairShare = 0;
+    }
+    fairShippingByOrderId.set(order.id, fairShare);
+  });
+
+  let totalOverpaid = 0;
+  let totalUnderpaid = 0;
+
+  const enriched: EnrichedOrder[] = submitted.map((order) => {
+    const fairShipping = fairShippingByOrderId.get(order.id) ?? 0;
+    const currentFairTotal = Number(order.food_subtotal) + fairShipping;
+    const isLocked = order.payment_status !== "unpaid";
+
+    let overpaid = 0;
+    if (isLocked) {
+      const amountPaid = Number(
+        order.amount_paid !== undefined && order.amount_paid !== null
+          ? order.amount_paid
+          : order.grand_total,
+      );
+      overpaid = amountPaid - currentFairTotal;
+      if (overpaid > 0) {
+        totalOverpaid += overpaid;
+      } else if (overpaid < 0) {
+        totalUnderpaid += Math.abs(overpaid);
+      }
+    }
+
+    return {
+      ...order,
+      current_fair_shipping_share: fairShipping,
+      current_fair_total: currentFairTotal,
+      overpaid_amount: overpaid,
+    };
+  });
+
+  return {
+    total_overpaid: totalOverpaid,
+    total_underpaid: totalUnderpaid,
+    enriched_orders: enriched,
+  };
+}

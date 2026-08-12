@@ -110,8 +110,9 @@ export interface MemberOrder {
   food_subtotal: number;
   shipping_share: number;
   grand_total: number;
+  amount_paid?: number;
   payment_status: MemberPaymentStatus;
-  payment_reset_notice?: boolean; // true if items changed after payment was reported/confirmed, resetting status back to unpaid
+  payment_reset_notice?: boolean;
   status: "draft" | "submitted" | "cancelled";
   created_at: string;
   updated_at: string;

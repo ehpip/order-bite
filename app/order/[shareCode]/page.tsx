@@ -20,8 +20,9 @@ import {
   Check,
   Copy,
   Users,
+  RefreshCw,
 } from "lucide-react";
-import { db } from "@/lib/storage/db-service";
+import { db, enrichOrdersWithOverpayment } from "@/lib/storage/db-service";
 import {
   OrderSession,
   MenuSnapshot,
@@ -459,6 +460,18 @@ export default function PublicMemberOrderPage({
   const isExpired = new Date(session.deadline).getTime() < Date.now();
   const isClosed = session.status === "closed" || isExpired;
 
+  const { enriched_orders: enrichedOrders } = enrichOrdersWithOverpayment(
+    session,
+    allOrders,
+  );
+  const myEnrichedOrder = existingOrder
+    ? enrichedOrders.find((eo) => eo.id === existingOrder.id)
+    : null;
+  const myOverpaid = myEnrichedOrder?.overpaid_amount ?? 0;
+  const myCurrentFairTotal = myEnrichedOrder?.current_fair_total ?? 0;
+  const myCurrentFairShipping =
+    myEnrichedOrder?.current_fair_shipping_share ?? 0;
+
   // Extract Categories
   const categoryNames = Array.from(
     new Set(snapshotItems.map((i) => i.category_name || "General")),
@@ -644,7 +657,81 @@ export default function PublicMemberOrderPage({
                   ))}
                 </div>
 
-                {/* NEW: Payment breakdown — clears up the "which amount do I pay" confusion */}
+                {/* Overpayment Notice — shown when more people joined after you paid */}
+                {myOverpaid > 0 && (
+                  <div className="bg-sky-50 border-2 border-sky-300 p-4 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <RefreshCw className="w-4 h-4 text-sky-700" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-extrabold text-sky-900">
+                            You&apos;re owed {formatCurrency(myOverpaid)} back
+                          </div>
+                          <p className="text-[11px] text-sky-700 leading-relaxed mt-0.5">
+                            New people joined after you paid, which lowered the
+                            shared shipping cost. Your original total was{" "}
+                            <strong>
+                              {formatCurrency(
+                                Number(
+                                  existingOrder.amount_paid ??
+                                    existingOrder.grand_total,
+                                ),
+                              )}
+                            </strong>
+                            , but with the current headcount of{" "}
+                            <strong>{allOrders.length} people</strong>, your
+                            fair share is now only{" "}
+                            <strong>
+                              {formatCurrency(myCurrentFairTotal)}
+                            </strong>
+                            .
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-[10px] text-sky-500 font-bold uppercase tracking-wide">
+                          Refund
+                        </div>
+                        <div className="text-lg font-extrabold text-sky-700">
+                          +{formatCurrency(myOverpaid)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white/70 rounded-xl p-2.5 text-[11px] text-sky-800 space-y-1 border border-sky-200/60">
+                      <div className="flex justify-between">
+                        <span>Original food + shipping paid</span>
+                        <span className="font-semibold">
+                          {formatCurrency(
+                            Number(
+                              existingOrder.amount_paid ??
+                                existingOrder.grand_total,
+                            ),
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Current fair total (updated headcount)</span>
+                        <span className="font-semibold">
+                          {formatCurrency(myCurrentFairTotal)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between pt-1 border-t border-sky-200/60">
+                        <span className="font-extrabold text-sky-900">
+                          You overpaid
+                        </span>
+                        <span className="font-extrabold text-sky-700">
+                          {formatCurrency(myOverpaid)}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-sky-600 leading-relaxed">
+                      The host has been notified. Reach out to them to get the
+                      difference refunded or credited against a future order.
+                    </p>
+                  </div>
+                )}
                 {(() => {
                   const itemsSubtotal = existingOrder.items.reduce(
                     (sum, it) => sum + it.subtotal,
