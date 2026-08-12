@@ -1,4 +1,4 @@
-export type StoreStatus = 'active' | 'archived';
+export type StoreStatus = "active" | "archived";
 
 export interface Store {
   id: string;
@@ -59,9 +59,9 @@ export interface MenuSnapshotItem {
   original_item_id?: string;
 }
 
-export type ShippingSplitMethod = 'equal' | 'proportional' | 'host';
-export type SessionStatus = 'draft' | 'open' | 'closed' | 'cancelled';
-export type MemberPaymentStatus = 'unpaid' | 'payment_reported' | 'paid';
+export type ShippingSplitMethod = "equal" | "proportional" | "host";
+export type SessionStatus = "draft" | "open" | "closed" | "cancelled";
+export type MemberPaymentStatus = "unpaid" | "payment_reported" | "paid";
 
 export interface OrderSession {
   id: string;
@@ -111,7 +111,8 @@ export interface MemberOrder {
   shipping_share: number;
   grand_total: number;
   payment_status: MemberPaymentStatus;
-  status: 'draft' | 'submitted' | 'cancelled';
+  payment_reset_notice?: boolean; // true if items changed after payment was reported/confirmed, resetting status back to unpaid
+  status: "draft" | "submitted" | "cancelled";
   created_at: string;
   updated_at: string;
 }

@@ -590,6 +590,24 @@ class LocalDatabase {
       (o) =>
         o.session_id === params.session_id && o.member_id === params.member_id,
     );
+    const previousOrder = existingIdx >= 0 ? this.orders[existingIdx] : null;
+
+    let paymentStatus: MemberPaymentStatus = "unpaid";
+    let paymentResetNotice = false;
+
+    if (previousOrder) {
+      const itemsChanged = haveOrderItemsChanged(
+        previousOrder.items,
+        params.items,
+      );
+      if (itemsChanged && previousOrder.payment_status !== "unpaid") {
+        // Amount changed after payment was reported/confirmed — must re-verify.
+        paymentStatus = "unpaid";
+        paymentResetNotice = true;
+      } else {
+        paymentStatus = previousOrder.payment_status;
+      }
+    }
 
     const now = new Date().toISOString();
     const newOrUpdatedOrder: MemberOrder = {
@@ -601,8 +619,8 @@ class LocalDatabase {
       food_subtotal: foodSubtotal,
       shipping_share: 0, // Calculated during recalculateSessionOrderTotals
       grand_total: foodSubtotal,
-      payment_status:
-        existingIdx >= 0 ? this.orders[existingIdx].payment_status : "unpaid",
+      payment_status: paymentStatus,
+      payment_reset_notice: paymentResetNotice,
       status: "submitted",
       created_at: existingIdx >= 0 ? this.orders[existingIdx].created_at : now,
       updated_at: now,
@@ -629,7 +647,14 @@ class LocalDatabase {
     if (idx < 0) return null;
 
     this.orders[idx].payment_status = paymentStatus;
+    this.orders[idx].payment_reset_notice = false;
     this.orders[idx].updated_at = new Date().toISOString();
+
+    // Locking (unpaid -> reported/paid) freezes this order's current totals
+    // automatically, since recalculateSessionOrderTotals now skips locked
+    // orders. Unlocking (reverting to unpaid) needs a recalc so the order
+    // rejoins the shared shipping pool.
+    this.recalculateSessionOrderTotals(this.orders[idx].session_id);
     this.persistAll();
     return this.orders[idx];
   }
@@ -646,6 +671,14 @@ class LocalDatabase {
   /**
    * Recalculates shipping share for all submitted member orders in a session
    */
+  /**
+   * Recalculates shipping share for all submitted member orders in a session.
+   * Orders whose payment_status is no longer "unpaid" (reported or confirmed
+   * paid) are LOCKED: their shipping_share/grand_total stay frozen at
+   * whatever they were when locked, and they're excluded from redistribution.
+   * Only still-unpaid orders absorb the remaining shipping cost as headcount
+   * changes.
+   */
   private recalculateSessionOrderTotals(sessionId: string) {
     const session = this.sessions.find((s) => s.id === sessionId);
     if (!session) return;
@@ -653,26 +686,43 @@ class LocalDatabase {
     const sessionOrders = this.orders.filter(
       (o) => o.session_id === sessionId && o.status === "submitted",
     );
-    const memberCount = sessionOrders.length;
-    if (memberCount === 0) return;
+    if (sessionOrders.length === 0) return;
 
-    const totalFoodSubtotal = sessionOrders.reduce(
+    const lockedOrders = sessionOrders.filter(
+      (o) => o.payment_status !== "unpaid",
+    );
+    const unlockedOrders = sessionOrders.filter(
+      (o) => o.payment_status === "unpaid",
+    );
+
+    if (unlockedOrders.length === 0) return; // everyone already paid/reported
+
+    const lockedShippingSum = lockedOrders.reduce(
+      (sum, o) => sum + o.shipping_share,
+      0,
+    );
+    const remainingShipping = Math.max(
+      0,
+      session.shipping_cost - lockedShippingSum,
+    );
+
+    const totalFoodSubtotalUnlocked = unlockedOrders.reduce(
       (sum, o) => sum + o.food_subtotal,
       0,
     );
 
-    sessionOrders.forEach((order) => {
+    unlockedOrders.forEach((order) => {
       let shippingShare = 0;
       if (session.shipping_split_method === "equal") {
-        shippingShare = Math.round(session.shipping_cost / memberCount);
+        shippingShare = Math.round(remainingShipping / unlockedOrders.length);
       } else if (session.shipping_split_method === "proportional") {
-        if (totalFoodSubtotal > 0) {
-          shippingShare = Math.round(
-            (order.food_subtotal / totalFoodSubtotal) * session.shipping_cost,
-          );
-        } else {
-          shippingShare = 0;
-        }
+        shippingShare =
+          totalFoodSubtotalUnlocked > 0
+            ? Math.round(
+                (order.food_subtotal / totalFoodSubtotalUnlocked) *
+                  remainingShipping,
+              )
+            : 0;
       } else {
         shippingShare = 0; // Host pays
       }
@@ -688,6 +738,34 @@ function toValidUuidOrNull(str?: string | null): string | null {
   const uuidRegex =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidRegex.test(str) ? str : null;
+}
+
+function haveOrderItemsChanged(
+  oldItems: MemberOrderItem[],
+  newItems: { snapshot_item_id: string; quantity: number; notes?: string }[],
+): boolean {
+  if (oldItems.length !== newItems.length) return true;
+
+  const normalize = (
+    arr: { snapshot_item_id: string; quantity: number; notes?: string }[],
+  ) =>
+    [...arr]
+      .map(
+        (i) => `${i.snapshot_item_id}:${i.quantity}:${(i.notes || "").trim()}`,
+      )
+      .sort()
+      .join("|");
+
+  const oldNormalized = normalize(
+    oldItems.map((i) => ({
+      snapshot_item_id: i.snapshot_item_id,
+      quantity: i.quantity,
+      notes: i.notes,
+    })),
+  );
+  const newNormalized = normalize(newItems);
+
+  return oldNormalized !== newNormalized;
 }
 
 const localDb = new LocalDatabase();
@@ -1455,6 +1533,20 @@ class SupabaseDatabase {
       params.session_id,
       params.member_id,
     );
+    let paymentStatus: MemberPaymentStatus = "unpaid";
+    let paymentResetNotice = false;
+    if (existingOrder) {
+      const itemsChanged = haveOrderItemsChanged(
+        existingOrder.items,
+        params.items,
+      );
+      if (itemsChanged && existingOrder.payment_status !== "unpaid") {
+        paymentStatus = "unpaid";
+        paymentResetNotice = true;
+      } else {
+        paymentStatus = existingOrder.payment_status;
+      }
+    }
     let orderId: string;
 
     const validSessionUuid = toValidUuidOrNull(params.session_id);
@@ -1475,6 +1567,8 @@ class SupabaseDatabase {
           member_name: params.member_name,
           food_subtotal: foodSubtotal,
           grand_total: foodSubtotal,
+          payment_status: paymentStatus,
+          payment_reset_notice: paymentResetNotice,
           status: "submitted",
           updated_at: new Date().toISOString(),
         })
@@ -1495,6 +1589,7 @@ class SupabaseDatabase {
           shipping_share: 0,
           grand_total: foodSubtotal,
           payment_status: "unpaid",
+          payment_reset_notice: false,
           status: "submitted",
         })
         .select()
@@ -1533,6 +1628,7 @@ class SupabaseDatabase {
       .from("member_orders")
       .update({
         payment_status: paymentStatus,
+        payment_reset_notice: false,
         updated_at: new Date().toISOString(),
       })
       .eq("id", validOrderUuid)
@@ -1542,14 +1638,15 @@ class SupabaseDatabase {
     if (error || !data)
       return localDb.updateMemberPaymentStatus(orderId, paymentStatus);
 
+    // Locking freezes this order's current totals automatically (recalc
+    // skips locked orders). Unlocking needs a recalc so it rejoins the pool.
+    await this.recalculateSessionOrderTotals(data.session_id);
+
     const { data: itemsData } = await client
       .from("member_order_items")
       .select("*")
       .eq("order_id", validOrderUuid);
-    return {
-      ...data,
-      items: (itemsData || []) as MemberOrderItem[],
-    };
+    return { ...data, items: (itemsData || []) as MemberOrderItem[] };
   }
 
   async deleteMemberOrder(orderId: string): Promise<void> {
@@ -1586,32 +1683,47 @@ class SupabaseDatabase {
       .eq("status", "submitted");
     if (!sessionOrders || sessionOrders.length === 0) return;
 
-    const memberCount = sessionOrders.length;
-    const totalFoodSubtotal = sessionOrders.reduce(
+    const lockedOrders = sessionOrders.filter(
+      (o) => o.payment_status !== "unpaid",
+    );
+    const unlockedOrders = sessionOrders.filter(
+      (o) => o.payment_status === "unpaid",
+    );
+
+    if (unlockedOrders.length === 0) return; // everyone already paid/reported
+
+    const lockedShippingSum = lockedOrders.reduce(
+      (sum, o) => sum + Number(o.shipping_share),
+      0,
+    );
+    const remainingShipping = Math.max(
+      0,
+      session.shipping_cost - lockedShippingSum,
+    );
+
+    const totalFoodSubtotalUnlocked = unlockedOrders.reduce(
       (sum, o) => sum + Number(o.food_subtotal),
       0,
     );
 
-    for (const order of sessionOrders) {
+    for (const order of unlockedOrders) {
       let shippingShare = 0;
       if (session.shipping_split_method === "equal") {
-        shippingShare = Math.round(session.shipping_cost / memberCount);
+        shippingShare = Math.round(remainingShipping / unlockedOrders.length);
       } else if (session.shipping_split_method === "proportional") {
-        if (totalFoodSubtotal > 0) {
-          shippingShare = Math.round(
-            (Number(order.food_subtotal) / totalFoodSubtotal) *
-              session.shipping_cost,
-          );
-        }
+        shippingShare =
+          totalFoodSubtotalUnlocked > 0
+            ? Math.round(
+                (Number(order.food_subtotal) / totalFoodSubtotalUnlocked) *
+                  remainingShipping,
+              )
+            : 0;
       }
 
       const grandTotal = Number(order.food_subtotal) + shippingShare;
       await client
         .from("member_orders")
-        .update({
-          shipping_share: shippingShare,
-          grand_total: grandTotal,
-        })
+        .update({ shipping_share: shippingShare, grand_total: grandTotal })
         .eq("id", order.id);
     }
   }

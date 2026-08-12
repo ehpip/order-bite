@@ -509,187 +509,87 @@ export default function PublicMemberOrderPage({
           <CountdownBadge deadlineISO={session.deadline} isClosed={isClosed} />
         </div>
       </header>
+
       {/* Main Container */}
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
-        {/* Participants Section */}
-        {session && (
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-                  <Users className="w-4 h-4 text-orange-600" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-extrabold text-slate-900">
-                    Session Participants
-                  </h2>
-                  <p className="text-[11px] text-slate-500">
-                    {allOrders.length} {allOrders.length === 1 ? 'person' : 'people'} joined this group order
-                  </p>
-                </div>
-              </div>
-              <div className="flex -space-x-1.5">
-                {allOrders.slice(0, 5).map((o, idx) => (
-                  <div
-                    key={o.id || idx}
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-extrabold border-2 border-white ${getAvatarColor(o.member_name)}`}
-                    title={o.member_name}
-                  >
-                    {getInitials(o.member_name)}
-                  </div>
-                ))}
-                {allOrders.length > 5 && (
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-extrabold border-2 border-white bg-slate-100 text-slate-600">
-                    +{allOrders.length - 5}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {!nameSubmitted ? (
-              <div className="text-center py-3 text-[11px] text-slate-400">
-                Enter your name to see who joined and their orders
-              </div>
-            ) : allOrders.length === 0 ? (
-              <div className="text-center py-4 text-xs text-slate-400">
-                <Users className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
-                Be the first to join this order!
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {allOrders.map((order) => {
-                  const isCurrentUser =
-                    existingOrder && existingOrder.id === order.id;
-                  return (
-                    <div
-                      key={order.id}
-                      className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors ${
-                        isCurrentUser
-                          ? 'bg-orange-50 border-2 border-orange-200'
-                          : 'bg-slate-50 border border-slate-100'
-                      }`}
-                    >
-                      <div
-                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-extrabold border-2 shrink-0 ${getAvatarColor(
-                          order.member_name,
-                        )}`}
-                      >
-                        {getInitials(order.member_name)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-xs text-slate-900 truncate">
-                            {order.member_name}
-                          </span>
-                          {isCurrentUser && (
-                            <span className="shrink-0 text-[9px] font-extrabold uppercase tracking-wide bg-orange-600 text-white px-1.5 py-0.5 rounded-full">
-                              You
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                          {order.items.length > 0
-                            ? order.items
-                                .map((i) => `${i.quantity}x ${i.item_name}`)
-                                .join(', ')
-                            : 'No items ordered yet'}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          {order.payment_status === 'paid' ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-                              <CheckCircle2 className="w-3 h-3" />
-                              Paid
-                            </span>
-                          ) : order.payment_status === 'payment_reported' ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                              <Clock className="w-3 h-3" />
-                              Verifying
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
-                              <Clock className="w-3 h-3" />
-                              Unpaid
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-xs font-extrabold text-slate-900">
-                          {formatCurrency(order.grand_total)}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          {order.items.reduce(
-                            (sum, i) => sum + i.quantity,
-                            0,
-                          )}{' '}
-                          items
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {nameSubmitted && allOrders.length > 0 && (
-              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-600">
-                <span>
-                  Total Collected ({allOrders.filter(
-                    (o) => o.payment_status === 'paid',
-                  ).length}
-                  /{allOrders.length} paid)
-                </span>
-                <span className="font-extrabold text-slate-900">
-                  {formatCurrency(
-                    allOrders.reduce(
-                      (sum, o) =>
-                        o.payment_status === 'paid' ? sum + o.grand_total : sum,
-                      0,
-                    ),
-                  )}{' '}
-                  /{' '}
-                  {formatCurrency(
-                    allOrders.reduce((sum, o) => sum + o.grand_total, 0),
-                  )}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Step 1: Member Name Prompt Modal or Card */}
         {!nameSubmitted ? (
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center space-y-4 my-6">
-            <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600 mx-auto">
-              <Utensils className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">
-                Join Group Food Order
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Ordering from <strong>{snapshot?.store_name}</strong>. Enter
-                your name to view the menu and pick your food!
-              </p>
-            </div>
+          <>
+            {/* Participants Section (shown before the name form) */}
+            {session && (
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                      <Users className="w-4 h-4 text-orange-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-extrabold text-slate-900">
+                        Session Participants
+                      </h2>
+                      <p className="text-[11px] text-slate-500">
+                        {allOrders.length}{" "}
+                        {allOrders.length === 1 ? "person" : "people"} joined
+                        this group order
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex -space-x-1.5">
+                    {allOrders.slice(0, 5).map((o, idx) => (
+                      <div
+                        key={o.id || idx}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-extrabold border-2 border-white ${getAvatarColor(o.member_name)}`}
+                        title={o.member_name}
+                      >
+                        {getInitials(o.member_name)}
+                      </div>
+                    ))}
+                    {allOrders.length > 5 && (
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-extrabold border-2 border-white bg-slate-100 text-slate-600">
+                        +{allOrders.length - 5}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-            <form onSubmit={handleStartOrdering} className="space-y-3">
-              <input
-                type="text"
-                required
-                value={memberName}
-                onChange={(e) => setMemberName(e.target.value)}
-                placeholder="Enter your name (e.g. Afif)"
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-medium outline-hidden focus:border-orange-600 text-center"
-              />
-              <button
-                type="submit"
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-xs cursor-pointer"
-              >
-                Start Ordering Menu →
-              </button>
-            </form>
-          </div>
+                <div className="text-center py-3 text-[11px] text-slate-400">
+                  Enter your name to see who joined and their orders
+                </div>
+              </div>
+            )}
+
+            {/* Step 1: Member Name Prompt Modal or Card */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center space-y-4 my-6">
+              <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600 mx-auto">
+                <Utensils className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">
+                  Join Group Food Order
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Ordering from <strong>{snapshot?.store_name}</strong>. Enter
+                  your name to view the menu and pick your food!
+                </p>
+              </div>
+
+              <form onSubmit={handleStartOrdering} className="space-y-3">
+                <input
+                  type="text"
+                  required
+                  value={memberName}
+                  onChange={(e) => setMemberName(e.target.value)}
+                  placeholder="Enter your name (e.g. Afif)"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-medium outline-hidden focus:border-orange-600 text-center"
+                />
+                <button
+                  type="submit"
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-xs cursor-pointer"
+                >
+                  Start Ordering Menu →
+                </button>
+              </form>
+            </div>
+          </>
         ) : (
           <>
             {/* Success Toast */}
@@ -699,7 +599,7 @@ export default function PublicMemberOrderPage({
               </div>
             )}
 
-            {/* Existing Submitted Order Summary Banner */}
+            {/* Existing Submitted Order Summary Banner — NOW AT THE TOP */}
             {existingOrder && (
               <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
@@ -710,6 +610,15 @@ export default function PublicMemberOrderPage({
                       <div className="text-sm font-extrabold text-emerald-900">
                         Order Submitted Successfully
                       </div>
+
+                      {existingOrder.payment_reset_notice && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-[11px] font-semibold text-rose-700 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0" />
+                          Your order changed after payment was reported — please
+                          re-transfer the updated total below and tap "I've
+                          Paid" again.
+                        </div>
+                      )}
 
                       <div className="text-[11px] text-emerald-700">
                         Hi {existingOrder.member_name}, your order has been
@@ -735,6 +644,48 @@ export default function PublicMemberOrderPage({
                   ))}
                 </div>
 
+                {/* NEW: Payment breakdown — clears up the "which amount do I pay" confusion */}
+                {(() => {
+                  const itemsSubtotal = existingOrder.items.reduce(
+                    (sum, it) => sum + it.subtotal,
+                    0,
+                  );
+                  const shippingAndOther =
+                    existingOrder.grand_total - itemsSubtotal;
+
+                  return (
+                    <div className="bg-orange-50 border-2 border-orange-300 rounded-2xl p-3.5 space-y-1.5">
+                      <div className="flex justify-between text-xs text-slate-600">
+                        <span>Your Food Items</span>
+                        <span className="font-semibold">
+                          {formatCurrency(itemsSubtotal)}
+                        </span>
+                      </div>
+                      {shippingAndOther > 0 && (
+                        <div className="flex justify-between text-xs text-slate-600">
+                          <span>Your Share of Shipping / Fees</span>
+                          <span className="font-semibold">
+                            {formatCurrency(shippingAndOther)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-1.5 border-t border-orange-200">
+                        <span className="text-xs font-extrabold text-orange-900">
+                          Total to Transfer
+                        </span>
+                        <span className="text-base font-extrabold text-orange-900">
+                          {formatCurrency(existingOrder.grand_total)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-orange-700 leading-relaxed pt-1">
+                        This total already includes your share of the shipping /
+                        delivery fee. Please transfer this exact amount below —
+                        not just the food items total.
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 {/* Payment instructions */}
                 {session.payment_notes && (
                   <div className="bg-white border-2 border-emerald-300 rounded-2xl p-4 space-y-4">
@@ -749,7 +700,11 @@ export default function PublicMemberOrderPage({
                         </div>
 
                         <div className="text-[11px] font-medium text-emerald-700">
-                          Please transfer your payment to:
+                          Please transfer{" "}
+                          <strong>
+                            {formatCurrency(existingOrder.grand_total)}
+                          </strong>{" "}
+                          to:
                         </div>
                       </div>
                     </div>
@@ -830,6 +785,155 @@ export default function PublicMemberOrderPage({
                     </span>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Participants Section — NOW BELOW the order banner */}
+            {session && (
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                      <Users className="w-4 h-4 text-orange-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-extrabold text-slate-900">
+                        Session Participants
+                      </h2>
+                      <p className="text-[11px] text-slate-500">
+                        {allOrders.length}{" "}
+                        {allOrders.length === 1 ? "person" : "people"} joined
+                        this group order
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex -space-x-1.5">
+                    {allOrders.slice(0, 5).map((o, idx) => (
+                      <div
+                        key={o.id || idx}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-extrabold border-2 border-white ${getAvatarColor(o.member_name)}`}
+                        title={o.member_name}
+                      >
+                        {getInitials(o.member_name)}
+                      </div>
+                    ))}
+                    {allOrders.length > 5 && (
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-extrabold border-2 border-white bg-slate-100 text-slate-600">
+                        +{allOrders.length - 5}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {allOrders.length === 0 ? (
+                  <div className="text-center py-4 text-xs text-slate-400">
+                    <Users className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
+                    Be the first to join this order!
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {allOrders.map((order) => {
+                      const isCurrentUser =
+                        existingOrder && existingOrder.id === order.id;
+                      return (
+                        <div
+                          key={order.id}
+                          className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors ${
+                            isCurrentUser
+                              ? "bg-orange-50 border-2 border-orange-200"
+                              : "bg-slate-50 border border-slate-100"
+                          }`}
+                        >
+                          <div
+                            className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-extrabold border-2 shrink-0 ${getAvatarColor(
+                              order.member_name,
+                            )}`}
+                          >
+                            {getInitials(order.member_name)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-slate-900 truncate">
+                                {order.member_name}
+                              </span>
+                              {isCurrentUser && (
+                                <span className="shrink-0 text-[9px] font-extrabold uppercase tracking-wide bg-orange-600 text-white px-1.5 py-0.5 rounded-full">
+                                  You
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                              {order.items.length > 0
+                                ? order.items
+                                    .map((i) => `${i.quantity}x ${i.item_name}`)
+                                    .join(", ")
+                                : "No items ordered yet"}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {order.payment_status === "paid" ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Paid
+                                </span>
+                              ) : order.payment_status ===
+                                "payment_reported" ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                                  <Clock className="w-3 h-3" />
+                                  Verifying
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                                  <Clock className="w-3 h-3" />
+                                  Unpaid
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-xs font-extrabold text-slate-900">
+                              {formatCurrency(order.grand_total)}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {order.items.reduce(
+                                (sum, i) => sum + i.quantity,
+                                0,
+                              )}{" "}
+                              items
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {allOrders.length > 0 && (
+                  <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-600">
+                    <span>
+                      Total Collected (
+                      {
+                        allOrders.filter((o) => o.payment_status === "paid")
+                          .length
+                      }
+                      /{allOrders.length} paid)
+                    </span>
+                    <span className="font-extrabold text-slate-900">
+                      {formatCurrency(
+                        allOrders.reduce(
+                          (sum, o) =>
+                            o.payment_status === "paid"
+                              ? sum + o.grand_total
+                              : sum,
+                          0,
+                        ),
+                      )}{" "}
+                      /{" "}
+                      {formatCurrency(
+                        allOrders.reduce((sum, o) => sum + o.grand_total, 0),
+                      )}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1089,6 +1193,7 @@ export default function PublicMemberOrderPage({
           </div>
         </div>
       )}
+
       {/* Checkout Review Drawer / Modal */}
       {checkoutOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
