@@ -5,21 +5,35 @@ import Link from 'next/link';
 import Navbar from '@/components/navbar';
 import { Utensils, PlusCircle, Share2, Clock, CheckCircle2, ArrowRight, Store as StoreIcon, ShieldCheck, Users, DollarSign } from 'lucide-react';
 import { db } from '@/lib/storage/db-service';
-import { OrderSession, Store } from '@/lib/types';
+import { OrderSession, Store, MemberOrder } from '@/lib/types';
 import { formatCurrency } from '@/lib/formatters';
 import CountdownBadge from '@/components/ui/countdown-badge';
 import { useAuth } from '@/lib/auth-context';
+import { getInitials, getAvatarColor } from '@/lib/utils';
+
+type SessionWithParticipants = OrderSession & {
+  participants: MemberOrder[];
+};
 
 export default function HomePage() {
   const { isHostOwner } = useAuth();
-  const [activeSessions, setActiveSessions] = useState<OrderSession[]>([]);
+  const [activeSessions, setActiveSessions] = useState<SessionWithParticipants[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
 
   useEffect(() => {
     async function loadData() {
       const allSessions = await db.getSessions();
       const openSessions = allSessions.filter((s) => s.status === 'open');
-      setActiveSessions(openSessions);
+
+      const sessionsWithParticipants: SessionWithParticipants[] = [];
+      for (const sess of openSessions) {
+        const orders = await db.getOrdersForSession(sess.id);
+        sessionsWithParticipants.push({
+          ...sess,
+          participants: orders,
+        });
+      }
+      setActiveSessions(sessionsWithParticipants);
 
       const allStores = await db.getStores();
       setStores(allStores.slice(0, 4));
@@ -135,7 +149,7 @@ export default function HomePage() {
                     Host: <span className="font-semibold text-slate-700">{session.host_name || 'Host'}</span>
                   </p>
 
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600 mb-3">
                     <div className="flex justify-between">
                       <span>Shipping Fee:</span>
                       <span className="font-semibold text-slate-800">{formatCurrency(session.shipping_cost)}</span>
@@ -145,6 +159,35 @@ export default function HomePage() {
                       <span className="font-semibold capitalize text-slate-800">{session.shipping_split_method}</span>
                     </div>
                   </div>
+
+                  {session.participants.length > 0 ? (
+                    <div className="flex items-center gap-3">
+                      <div className="flex -space-x-2">
+                        {session.participants.slice(0, 4).map((p, idx) => (
+                          <div
+                            key={p.id || idx}
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-extrabold border-2 ${getAvatarColor(p.member_name)}`}
+                            title={p.member_name}
+                          >
+                            {getInitials(p.member_name)}
+                          </div>
+                        ))}
+                        {session.participants.length > 4 && (
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-extrabold border-2 bg-slate-100 text-slate-600 border-slate-200">
+                            +{session.participants.length - 4}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600">
+                        {session.participants.length} {session.participants.length === 1 ? 'person' : 'people'} joined
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>No one joined yet — be the first!</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 flex items-center gap-2">

@@ -19,6 +19,7 @@ import {
   X,
   Check,
   Copy,
+  Users,
 } from "lucide-react";
 import { db } from "@/lib/storage/db-service";
 import {
@@ -29,6 +30,7 @@ import {
 } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import CountdownBadge from "@/components/ui/countdown-badge";
+import { getInitials, getAvatarColor } from "@/lib/utils";
 
 export default function PublicMemberOrderPage({
   params,
@@ -42,6 +44,7 @@ export default function PublicMemberOrderPage({
   const [snapshotItems, setSnapshotItems] = useState<MenuSnapshotItem[]>([]);
   const [existingOrder, setExistingOrder] = useState<MemberOrder | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [allOrders, setAllOrders] = useState<MemberOrder[]>([]);
 
   // Member Identity
   const [memberName, setMemberName] = useState<string>("");
@@ -141,6 +144,9 @@ export default function PublicMemberOrderPage({
     const items = await db.getSnapshotItems(sess.menu_snapshot_id);
     setSnapshotItems(items);
 
+    const sessionOrders = await db.getOrdersForSession(sess.id);
+    setAllOrders(sessionOrders);
+
     // Check if member already entered name on this device
     const savedName = localStorage.getItem(`member_name_${sess.id}`);
     const savedMemberId = localStorage.getItem(`member_id_${sess.id}`);
@@ -155,7 +161,6 @@ export default function PublicMemberOrderPage({
         order = await db.getOrderForMember(sess.id, savedMemberId);
       }
       if (!order && savedName) {
-        const sessionOrders = await db.getOrdersForSession(sess.id);
         const match = sessionOrders.find(
           (o) =>
             o.member_name.trim().toLowerCase() ===
@@ -506,6 +511,148 @@ export default function PublicMemberOrderPage({
       </header>
       {/* Main Container */}
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+        {/* Participants Section */}
+        {session && (
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                  <Users className="w-4 h-4 text-orange-600" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-extrabold text-slate-900">
+                    Session Participants
+                  </h2>
+                  <p className="text-[11px] text-slate-500">
+                    {allOrders.length} {allOrders.length === 1 ? 'person' : 'people'} joined this group order
+                  </p>
+                </div>
+              </div>
+              <div className="flex -space-x-1.5">
+                {allOrders.slice(0, 5).map((o, idx) => (
+                  <div
+                    key={o.id || idx}
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-extrabold border-2 border-white ${getAvatarColor(o.member_name)}`}
+                    title={o.member_name}
+                  >
+                    {getInitials(o.member_name)}
+                  </div>
+                ))}
+                {allOrders.length > 5 && (
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-extrabold border-2 border-white bg-slate-100 text-slate-600">
+                    +{allOrders.length - 5}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {allOrders.length === 0 ? (
+              <div className="text-center py-4 text-xs text-slate-400">
+                <Users className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
+                Be the first to join this order!
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {allOrders.map((order) => {
+                  const isCurrentUser =
+                    existingOrder && existingOrder.id === order.id;
+                  return (
+                    <div
+                      key={order.id}
+                      className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors ${
+                        isCurrentUser
+                          ? 'bg-orange-50 border-2 border-orange-200'
+                          : 'bg-slate-50 border border-slate-100'
+                      }`}
+                    >
+                      <div
+                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-extrabold border-2 shrink-0 ${getAvatarColor(
+                          order.member_name,
+                        )}`}
+                      >
+                        {getInitials(order.member_name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-slate-900 truncate">
+                            {order.member_name}
+                          </span>
+                          {isCurrentUser && (
+                            <span className="shrink-0 text-[9px] font-extrabold uppercase tracking-wide bg-orange-600 text-white px-1.5 py-0.5 rounded-full">
+                              You
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                          {order.items.length > 0
+                            ? order.items
+                                .map((i) => `${i.quantity}x ${i.item_name}`)
+                                .join(', ')
+                            : 'No items ordered yet'}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          {order.payment_status === 'paid' ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Paid
+                            </span>
+                          ) : order.payment_status === 'payment_reported' ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                              <Clock className="w-3 h-3" />
+                              Verifying
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                              <Clock className="w-3 h-3" />
+                              Unpaid
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="text-xs font-extrabold text-slate-900">
+                          {formatCurrency(order.grand_total)}
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          {order.items.reduce(
+                            (sum, i) => sum + i.quantity,
+                            0,
+                          )}{' '}
+                          items
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {allOrders.length > 0 && (
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-600">
+                <span>
+                  Total Collected ({allOrders.filter(
+                    (o) => o.payment_status === 'paid',
+                  ).length}
+                  /{allOrders.length} paid)
+                </span>
+                <span className="font-extrabold text-slate-900">
+                  {formatCurrency(
+                    allOrders.reduce(
+                      (sum, o) =>
+                        o.payment_status === 'paid' ? sum + o.grand_total : sum,
+                      0,
+                    ),
+                  )}{' '}
+                  /{' '}
+                  {formatCurrency(
+                    allOrders.reduce((sum, o) => sum + o.grand_total, 0),
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Step 1: Member Name Prompt Modal or Card */}
         {!nameSubmitted ? (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center space-y-4 my-6">
