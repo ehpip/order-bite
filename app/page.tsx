@@ -1,15 +1,26 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import Navbar from '@/components/navbar';
-import { Utensils, PlusCircle, Share2, Clock, CheckCircle2, ArrowRight, Store as StoreIcon, ShieldCheck, Users, DollarSign } from 'lucide-react';
-import { db } from '@/lib/storage/db-service';
-import { OrderSession, Store, MemberOrder } from '@/lib/types';
-import { formatCurrency } from '@/lib/formatters';
-import CountdownBadge from '@/components/ui/countdown-badge';
-import { useAuth } from '@/lib/auth-context';
-import { getInitials, getAvatarColor } from '@/lib/utils';
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import Navbar from "@/components/navbar";
+import {
+  Utensils,
+  PlusCircle,
+  Share2,
+  Clock,
+  CheckCircle2,
+  ArrowRight,
+  Store as StoreIcon,
+  ShieldCheck,
+  Users,
+  DollarSign,
+} from "lucide-react";
+import { db } from "@/lib/storage/db-service";
+import { OrderSession, Store, MemberOrder } from "@/lib/types";
+import { formatCurrency, formatShippingCost } from "@/lib/formatters";
+import CountdownBadge from "@/components/ui/countdown-badge";
+import { useAuth } from "@/lib/auth-context";
+import { getInitials, getAvatarColor } from "@/lib/utils";
 
 type SessionWithParticipants = OrderSession & {
   participants: MemberOrder[];
@@ -17,13 +28,15 @@ type SessionWithParticipants = OrderSession & {
 
 export default function HomePage() {
   const { isHostOwner } = useAuth();
-  const [activeSessions, setActiveSessions] = useState<SessionWithParticipants[]>([]);
+  const [activeSessions, setActiveSessions] = useState<
+    SessionWithParticipants[]
+  >([]);
   const [stores, setStores] = useState<Store[]>([]);
 
   useEffect(() => {
     async function loadData() {
       const allSessions = await db.getSessions();
-      const openSessions = allSessions.filter((s) => s.status === 'open');
+      const openSessions = allSessions.filter((s) => s.status === "open");
 
       const sessionsWithParticipants: SessionWithParticipants[] = [];
       for (const sess of openSessions) {
@@ -59,7 +72,9 @@ export default function HomePage() {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-            Create a session, share one link with your team, let everyone pick their food, and easily track who has paid — no registration required for members!
+            Create a session, share one link with your team, let everyone pick
+            their food, and easily track who has paid — no registration required
+            for members!
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
@@ -81,24 +96,46 @@ export default function HomePage() {
           {/* Quick steps banner */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-10 text-left border-t border-slate-200/80">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">1</div>
-              <div className="text-sm font-bold text-slate-900">Choose Store</div>
-              <div className="text-xs text-slate-500 mt-1">Select TamrLatte, Point Coffee, Tuku, or custom restaurant</div>
+              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">
+                1
+              </div>
+              <div className="text-sm font-bold text-slate-900">
+                Choose Store
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Select TamrLatte, Point Coffee, Tuku, or custom restaurant
+              </div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">2</div>
+              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">
+                2
+              </div>
               <div className="text-sm font-bold text-slate-900">Share Link</div>
-              <div className="text-xs text-slate-500 mt-1">Send unique link or QR code to WhatsApp group</div>
+              <div className="text-xs text-slate-500 mt-1">
+                Send unique link or QR code to WhatsApp group
+              </div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">3</div>
-              <div className="text-sm font-bold text-slate-900">Members Order</div>
-              <div className="text-xs text-slate-500 mt-1">Members select food without logging in</div>
+              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">
+                3
+              </div>
+              <div className="text-sm font-bold text-slate-900">
+                Members Order
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Members select food without logging in
+              </div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">4</div>
-              <div className="text-sm font-bold text-slate-900">Track Payments</div>
-              <div className="text-xs text-slate-500 mt-1">Check paid vs unpaid and copy order summary</div>
+              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm mb-2">
+                4
+              </div>
+              <div className="text-sm font-bold text-slate-900">
+                Track Payments
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Check paid vs unpaid and copy order summary
+              </div>
             </div>
           </div>
         </div>
@@ -108,7 +145,9 @@ export default function HomePage() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Active Group Orders</h2>
+            <h2 className="text-xl font-bold text-slate-900">
+              Active Group Orders
+            </h2>
             <p className="text-xs sm:text-sm text-slate-500">
               Open sessions currently accepting member food choices
             </p>
@@ -124,7 +163,9 @@ export default function HomePage() {
         {activeSessions.length === 0 ? (
           <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-3">
             <Utensils className="w-8 h-8 text-slate-400 mx-auto" />
-            <p className="text-slate-600 font-medium text-sm">No active group orders right now.</p>
+            <p className="text-slate-600 font-medium text-sm">
+              No active group orders right now.
+            </p>
             <Link
               href="/dashboard/orders/new"
               className="inline-flex items-center gap-2 bg-orange-600 text-white font-medium text-xs px-4 py-2 rounded-lg"
@@ -141,22 +182,31 @@ export default function HomePage() {
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="font-bold text-base text-slate-900 line-clamp-1">{session.name}</h3>
+                    <h3 className="font-bold text-base text-slate-900 line-clamp-2">
+                      {session.name}
+                    </h3>
                     <CountdownBadge deadlineISO={session.deadline} />
                   </div>
                   <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-3">
                     <Users className="w-3.5 h-3.5 text-slate-400" />
-                    Host: <span className="font-semibold text-slate-700">{session.host_name || 'Host'}</span>
+                    Host:{" "}
+                    <span className="font-semibold text-slate-700">
+                      {session.host_name || "Host"}
+                    </span>
                   </p>
 
                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600 mb-3">
                     <div className="flex justify-between">
                       <span>Shipping Fee:</span>
-                      <span className="font-semibold text-slate-800">{formatCurrency(session.shipping_cost)}</span>
+                      <span className="font-semibold text-slate-800">
+                        {formatShippingCost(session.shipping_cost)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Split Method:</span>
-                      <span className="font-semibold capitalize text-slate-800">{session.shipping_split_method}</span>
+                      <span className="font-semibold capitalize text-slate-800">
+                        {session.shipping_split_method}
+                      </span>
                     </div>
                   </div>
 
@@ -179,7 +229,11 @@ export default function HomePage() {
                         )}
                       </div>
                       <span className="text-xs font-semibold text-slate-600">
-                        {session.participants.length} {session.participants.length === 1 ? 'person' : 'people'} joined
+                        {session.participants.length}{" "}
+                        {session.participants.length === 1
+                          ? "person"
+                          : "people"}{" "}
+                        joined
                       </span>
                     </div>
                   ) : (
@@ -217,7 +271,9 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-900">Featured Food Stores</h2>
+              <h2 className="text-xl font-bold text-slate-900">
+                Featured Food Stores
+              </h2>
               <p className="text-xs sm:text-sm text-slate-500">
                 Pre-loaded store database with categories & menu items
               </p>
@@ -246,14 +302,22 @@ export default function HomePage() {
                   )}
                   {store.logo && (
                     <div className="absolute -bottom-4 left-4 w-10 h-10 rounded-xl bg-white p-1 border border-slate-200 shadow-2xs">
-                      <img src={store.logo} alt={store.name} className="w-full h-full object-cover rounded-lg" />
+                      <img
+                        src={store.logo}
+                        alt={store.name}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
                     </div>
                   )}
                 </div>
 
                 <div className="p-4 pt-6 space-y-2 flex-1">
-                  <h3 className="font-bold text-sm text-slate-900 line-clamp-1">{store.name}</h3>
-                  <p className="text-xs text-slate-500 line-clamp-2">{store.description}</p>
+                  <h3 className="font-bold text-sm text-slate-900 line-clamp-1">
+                    {store.name}
+                  </h3>
+                  <p className="text-xs text-slate-500 line-clamp-2">
+                    {store.description}
+                  </p>
                 </div>
 
                 <div className="p-4 pt-0">

@@ -1,21 +1,41 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { PlusCircle, ListOrdered, Share2, ArrowRight, Clock, Users, DollarSign, Filter, Search, LogIn } from 'lucide-react';
-import { db } from '@/lib/storage/db-service';
-import { OrderSession, MemberOrder } from '@/lib/types';
-import { formatCurrency, formatDate } from '@/lib/formatters';
-import CountdownBadge from '@/components/ui/countdown-badge';
-import ShareQRDialog from '@/components/share-qr-dialog';
-import { useAuth } from '@/lib/auth-context';
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  PlusCircle,
+  ListOrdered,
+  Share2,
+  ArrowRight,
+  Clock,
+  Users,
+  DollarSign,
+  Filter,
+  Search,
+  LogIn,
+} from "lucide-react";
+import { db } from "@/lib/storage/db-service";
+import { OrderSession, MemberOrder } from "@/lib/types";
+import {
+  formatCurrency,
+  formatDate,
+  formatShippingCost,
+} from "@/lib/formatters";
+import CountdownBadge from "@/components/ui/countdown-badge";
+import ShareQRDialog from "@/components/share-qr-dialog";
+import { useAuth } from "@/lib/auth-context";
 
 export default function SessionsListPage() {
-  const { user, hostIdentifier, isHostOwner, loginWithGoogle, isLoading } = useAuth();
+  const { user, hostIdentifier, isHostOwner, loginWithGoogle, isLoading } =
+    useAuth();
   const [sessions, setSessions] = useState<OrderSession[]>([]);
-  const [ordersMap, setOrdersMap] = useState<Map<string, MemberOrder[]>>(new Map());
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all');
+  const [ordersMap, setOrdersMap] = useState<Map<string, MemberOrder[]>>(
+    new Map(),
+  );
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">(
+    "all",
+  );
   const [shareSession, setShareSession] = useState<OrderSession | null>(null);
 
   useEffect(() => {
@@ -37,9 +57,10 @@ export default function SessionsListPage() {
   }
 
   const filteredSessions = sessions.filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch =
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.share_code.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
+    const matchesStatus = statusFilter === "all" || s.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -47,9 +68,12 @@ export default function SessionsListPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Group Order Sessions</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            Group Order Sessions
+          </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Active and historical group food orders with payment tracking and summaries.
+            Active and historical group food orders with payment tracking and
+            summaries.
           </p>
         </div>
         <Link
@@ -91,15 +115,21 @@ export default function SessionsListPage() {
       {/* Sessions Grid */}
       {filteredSessions.length === 0 ? (
         <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-500 text-sm">
-          No group order sessions found. Click &quot;+ Create Group Order&quot; to start!
+          No group order sessions found. Click &quot;+ Create Group Order&quot;
+          to start!
         </div>
       ) : (
         <div className="space-y-4">
           {filteredSessions.map((session) => {
             const memberOrders = ordersMap.get(session.id) || [];
-            const foodSubtotal = memberOrders.reduce((sum, o) => sum + o.food_subtotal, 0);
+            const foodSubtotal = memberOrders.reduce(
+              (sum, o) => sum + o.food_subtotal,
+              0,
+            );
             const grandTotal = foodSubtotal + session.shipping_cost;
-            const paidCount = memberOrders.filter((o) => o.payment_status === 'paid').length;
+            const paidCount = memberOrders.filter(
+              (o) => o.payment_status === "paid",
+            ).length;
 
             return (
               <div
@@ -108,8 +138,13 @@ export default function SessionsListPage() {
               >
                 <div className="space-y-2 max-w-xl">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-bold text-slate-900 text-base">{session.name}</h3>
-                    <CountdownBadge deadlineISO={session.deadline} isClosed={session.status === 'closed'} />
+                    <h3 className="font-bold text-slate-900 text-base">
+                      {session.name}
+                    </h3>
+                    <CountdownBadge
+                      deadlineISO={session.deadline}
+                      isClosed={session.status === "closed"}
+                    />
                     <span className="text-[11px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                       #{session.share_code}
                     </span>
@@ -126,14 +161,21 @@ export default function SessionsListPage() {
                       Deadline: {formatDate(session.deadline)}
                     </span>
                     <span>•</span>
-                    <span>Shipping: {formatCurrency(session.shipping_cost)} ({session.shipping_split_method})</span>
+                    <span>
+                      Shipping: {formatShippingCost(session.shipping_cost)} (
+                      {session.shipping_split_method})
+                    </span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between md:justify-end gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100">
                   <div className="text-right">
-                    <div className="text-xs text-slate-400 font-medium">Grand Total</div>
-                    <div className="text-base font-extrabold text-orange-600">{formatCurrency(grandTotal)}</div>
+                    <div className="text-xs text-slate-400 font-medium">
+                      Grand Total
+                    </div>
+                    <div className="text-base font-extrabold text-orange-600">
+                      {formatCurrency(grandTotal)}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">

@@ -29,7 +29,11 @@ import {
   MenuSnapshotItem,
   MemberPaymentStatus,
 } from "@/lib/types";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import {
+  formatCurrency,
+  formatDate,
+  formatShippingCost,
+} from "@/lib/formatters";
 import CountdownBadge from "@/components/ui/countdown-badge";
 import ShareQRDialog from "@/components/share-qr-dialog";
 import CopySummaryMenu from "@/components/copy-summary-menu";
@@ -423,11 +427,13 @@ export default function SessionManagementPage({
             Shipping ({session.shipping_split_method})
           </div>
           <div className="text-2xl font-extrabold text-slate-900">
-            {formatCurrency(session.shipping_cost)}
+            {formatShippingCost(session.shipping_cost)}
           </div>
           <p className="text-[11px] text-slate-500">
             {session.shipping_split_method === "equal" && orders.length > 0
-              ? `${formatCurrency(Math.round(session.shipping_cost / orders.length))} / person`
+              ? session.shipping_cost <= 0
+                ? "Free"
+                : `${formatCurrency(Math.round(session.shipping_cost / orders.length))} / person`
               : session.shipping_split_method}
           </p>
         </div>
@@ -553,11 +559,11 @@ export default function SessionManagementPage({
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
                         Food: {formatCurrency(order.food_subtotal)} + Shipping
-                        Share: {formatCurrency(order.shipping_share)}
+                        Share: {formatShippingCost(order.shipping_share)}
                         {overpaidAmt > 0 && (
                           <span className="text-sky-600 ml-1.5">
                             · Fair now:{" "}
-                            {formatCurrency(
+                            {formatShippingCost(
                               enriched!.current_fair_shipping_share,
                             )}{" "}
                             shipping

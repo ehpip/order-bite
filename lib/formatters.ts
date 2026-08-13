@@ -2,23 +2,32 @@
  * Formats integer monetary values into Indonesian Rupiah (Rp XX.XXX) or general format.
  */
 export function formatCurrency(amount: number): string {
-  if (isNaN(amount)) return 'Rp 0';
-  return `Rp ${Math.round(amount).toLocaleString('id-ID')}`;
+  if (isNaN(amount)) return "Rp 0";
+  return `Rp ${Math.round(amount).toLocaleString("id-ID")}`;
+}
+
+/**
+ * Formats shipping cost: shows "Free" when zero, otherwise currency format.
+ */
+export function formatShippingCost(amount: number): string {
+  const value = Number(amount) || 0;
+  if (value <= 0) return "Free";
+  return formatCurrency(value);
 }
 
 /**
  * Formats date into readable localized string
  */
 export function formatDate(dateString?: string): string {
-  if (!dateString) return '-';
+  if (!dateString) return "-";
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
-  return date.toLocaleString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  return date.toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -35,14 +44,14 @@ export function formatTimeRemaining(deadlineISO: string): {
   const diff = deadline - now;
 
   if (diff <= 0) {
-    return { formatted: 'Deadline passed', isExpired: true, totalSeconds: 0 };
+    return { formatted: "Deadline passed", isExpired: true, totalSeconds: 0 };
   }
 
   const seconds = Math.floor((diff / 1000) % 60);
   const minutes = Math.floor((diff / (1000 * 60)) % 60);
   const hours = Math.floor(diff / (1000 * 60 * 60));
 
-  let result = '';
+  let result = "";
   if (hours > 0) result += `${hours}h `;
   if (minutes > 0 || hours > 0) result += `${minutes}m `;
   result += `${seconds}s`;
@@ -58,8 +67,9 @@ export function formatTimeRemaining(deadlineISO: string): {
  * Generates a random alphanumeric share code (e.g. "a8F92k")
  */
 export function generateShareCode(length = 6): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
+  const chars =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
   for (let i = 0; i < length; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
