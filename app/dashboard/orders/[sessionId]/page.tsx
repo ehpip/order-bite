@@ -26,7 +26,12 @@ import {
   ToggleRight,
   Edit3,
 } from "lucide-react";
-import { db, enrichOrdersWithOverpayment } from "@/lib/storage/db-service";
+import {
+  db,
+  enrichOrdersWithOverpayment,
+  isSessionEffectivelyOpen,
+  isSessionEffectivelyClosed,
+} from "@/lib/storage/db-service";
 import {
   OrderSession,
   MemberOrder,
@@ -113,7 +118,7 @@ export default function SessionManagementPage({
 
   async function handleToggleStatus() {
     if (!session || !isOwner) return;
-    const newStatus = session.status === "open" ? "closed" : "open";
+    const newStatus = isSessionEffectivelyOpen(session) ? "closed" : "open";
     await db.updateSession(session.id, { status: newStatus });
     loadData();
   }
@@ -457,7 +462,7 @@ export default function SessionManagementPage({
               </h1>
               <CountdownBadge
                 deadlineISO={session.deadline}
-                isClosed={session.status === "closed"}
+                isClosed={isSessionEffectivelyClosed(session)}
               />
             </div>
 
@@ -539,17 +544,17 @@ export default function SessionManagementPage({
             <button
               onClick={handleToggleStatus}
               className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                session.status === "open"
+                isSessionEffectivelyOpen(session)
                   ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200"
                   : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200"
               }`}
             >
-              {session.status === "open" ? (
+              {isSessionEffectivelyOpen(session) ? (
                 <Lock className="w-3.5 h-3.5" />
               ) : (
                 <Unlock className="w-3.5 h-3.5" />
               )}
-              {session.status === "open"
+              {isSessionEffectivelyOpen(session)
                 ? "Lock / Close Order"
                 : "Reopen Order"}
             </button>

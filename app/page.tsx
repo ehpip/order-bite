@@ -15,7 +15,11 @@ import {
   Users,
   DollarSign,
 } from "lucide-react";
-import { db } from "@/lib/storage/db-service";
+import {
+  db,
+  isSessionEffectivelyOpen,
+  isSessionEffectivelyClosed,
+} from "@/lib/storage/db-service";
 import { OrderSession, Store, MemberOrder } from "@/lib/types";
 import { formatCurrency, formatShippingCost } from "@/lib/formatters";
 import CountdownBadge from "@/components/ui/countdown-badge";
@@ -39,7 +43,9 @@ export default function HomePage() {
     async function loadData() {
       setDataLoading(true);
       const allSessions = await db.getSessions();
-      const openSessions = allSessions.filter((s) => s.status === "open");
+      const openSessions = allSessions.filter((s) =>
+        isSessionEffectivelyOpen(s),
+      );
 
       const sessionsWithParticipants: SessionWithParticipants[] = [];
       for (const sess of openSessions) {
@@ -56,6 +62,8 @@ export default function HomePage() {
       setDataLoading(false);
     }
     loadData();
+    const interval = setInterval(loadData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -233,7 +241,10 @@ export default function HomePage() {
                     <h3 className="font-bold text-base text-slate-900 line-clamp-2">
                       {session.name}
                     </h3>
-                    <CountdownBadge deadlineISO={session.deadline} />
+                    <CountdownBadge
+                      deadlineISO={session.deadline}
+                      isClosed={isSessionEffectivelyClosed(session)}
+                    />
                   </div>
                   {session.description && (
                     <p className="text-xs text-slate-500 line-clamp-2 mb-2 leading-relaxed">

@@ -35,6 +35,24 @@ class LocalDatabase {
     this.init();
   }
 
+  private closeExpiredSessions() {
+    const now = Date.now();
+    let changed = false;
+    for (let i = 0; i < this.sessions.length; i++) {
+      const s = this.sessions[i];
+      if (s.status === "open" && new Date(s.deadline).getTime() < now) {
+        this.sessions[i] = {
+          ...s,
+          status: "closed",
+          closed_at: s.closed_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        changed = true;
+      }
+    }
+    if (changed) this.persistAll();
+  }
+
   private init() {
     if (typeof window === "undefined") {
       this.stores = [...INITIAL_STORES];
@@ -412,6 +430,7 @@ class LocalDatabase {
 
   // --- SESSIONS ---
   async getSessions(hostId?: string): Promise<OrderSession[]> {
+    this.closeExpiredSessions();
     let list = [...this.sessions];
     if (hostId) {
       list = list.filter(
@@ -425,10 +444,12 @@ class LocalDatabase {
   }
 
   async getSessionByShareCode(shareCode: string): Promise<OrderSession | null> {
+    this.closeExpiredSessions();
     return this.sessions.find((s) => s.share_code === shareCode) || null;
   }
 
   async getSessionById(id: string): Promise<OrderSession | null> {
+    this.closeExpiredSessions();
     return this.sessions.find((s) => s.id === id) || null;
   }
 
@@ -846,6 +867,25 @@ const localDb = new LocalDatabase();
 class SupabaseDatabase {
   private get client() {
     return getSupabaseClient();
+  }
+
+  private async closeExpiredSessions(hostId?: string) {
+    const client = this.client;
+    if (!client) return;
+    try {
+      const now = new Date().toISOString();
+      let query = client
+        .from("order_sessions")
+        .update({ status: "closed", closed_at: now, updated_at: now })
+        .eq("status", "open")
+        .lt("deadline", now);
+      if (hostId) {
+        query = query.or(`host_identifier.eq.${hostId},host_id.eq.${hostId}`);
+      }
+      await query;
+    } catch (e) {
+      console.warn("Supabase closeExpiredSessions failed:", e);
+    }
   }
 
   // --- STORES ---
@@ -1328,6 +1368,7 @@ class SupabaseDatabase {
 
   // --- SESSIONS ---
   async getSessions(hostId?: string): Promise<OrderSession[]> {
+    await this.closeExpiredSessions(hostId);
     const localSessions = await localDb.getSessions(hostId);
     const client = this.client;
     if (!client) return localSessions;
@@ -1349,6 +1390,7 @@ class SupabaseDatabase {
   }
 
   async getSessionByShareCode(shareCode: string): Promise<OrderSession | null> {
+    await this.closeExpiredSessions();
     const client = this.client;
     if (!client) return localDb.getSessionByShareCode(shareCode);
     const { data, error } = await client
@@ -1364,6 +1406,7 @@ class SupabaseDatabase {
   }
 
   async getSessionById(id: string): Promise<OrderSession | null> {
+    await this.closeExpiredSessions();
     const client = this.client;
     if (!client) return localDb.getSessionById(id);
     const validUuid = toValidUuidOrNull(id);
@@ -2102,4 +2145,22 @@ export function enrichOrdersWithOverpayment(
     total_underpaid: totalUnderpaid,
     enriched_orders: enriched,
   };
+}
+
+export function isSessionExpired(session: { deadline: string }): boolean {
+  return new Date(session.deadline).getTime() < Date.now();
+}
+
+export function isSessionEffectivelyOpen(session: {
+  status: string;
+  deadline: string;
+}): boolean {
+  return session.status === "open" && !isSessionExpired(session);
+}
+
+export function isSessionEffectivelyClosed(session: {
+  status: string;
+  deadline: string;
+}): boolean {
+  return session.status === "closed" || isSessionExpired(session);
 }

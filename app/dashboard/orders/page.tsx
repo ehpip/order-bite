@@ -14,7 +14,11 @@ import {
   Search,
   LogIn,
 } from "lucide-react";
-import { db } from "@/lib/storage/db-service";
+import {
+  db,
+  isSessionEffectivelyOpen,
+  isSessionEffectivelyClosed,
+} from "@/lib/storage/db-service";
 import { OrderSession, MemberOrder } from "@/lib/types";
 import {
   formatCurrency,
@@ -43,6 +47,8 @@ export default function SessionsListPage() {
   useEffect(() => {
     if (!isLoading) {
       loadSessions();
+      const interval = setInterval(loadSessions, 30000);
+      return () => clearInterval(interval);
     }
   }, [user, hostIdentifier, isLoading]);
 
@@ -66,7 +72,12 @@ export default function SessionsListPage() {
       s.share_code.toLowerCase().includes(search.toLowerCase()) ||
       (s.description &&
         s.description.toLowerCase().includes(search.toLowerCase()));
-    const matchesStatus = statusFilter === "all" || s.status === statusFilter;
+    let matchesStatus = true;
+    if (statusFilter === "open") {
+      matchesStatus = isSessionEffectivelyOpen(s);
+    } else if (statusFilter === "closed") {
+      matchesStatus = isSessionEffectivelyClosed(s);
+    }
     return matchesSearch && matchesStatus;
   });
 
@@ -182,7 +193,7 @@ export default function SessionsListPage() {
                     </h3>
                     <CountdownBadge
                       deadlineISO={session.deadline}
-                      isClosed={session.status === "closed"}
+                      isClosed={isSessionEffectivelyClosed(session)}
                     />
                     <span className="text-[11px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                       #{session.share_code}

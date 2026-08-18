@@ -13,7 +13,11 @@ import {
   AlertCircle,
   LogIn,
 } from "lucide-react";
-import { db } from "@/lib/storage/db-service";
+import {
+  db,
+  isSessionEffectivelyOpen,
+  isSessionEffectivelyClosed,
+} from "@/lib/storage/db-service";
 import { OrderSession, Store, MemberOrder } from "@/lib/types";
 import {
   formatCurrency,
@@ -54,11 +58,13 @@ export default function DashboardPage() {
     }
     if (!isLoading) {
       loadData();
+      const interval = setInterval(loadData, 30000);
+      return () => clearInterval(interval);
     }
   }, [user, hostIdentifier, isLoading]);
 
-  const activeSessionsCount = sessions.filter(
-    (s) => s.status === "open",
+  const activeSessionsCount = sessions.filter((s) =>
+    isSessionEffectivelyOpen(s),
   ).length;
   const unpaidOrdersCount = allOrders.filter(
     (o) => o.payment_status === "unpaid",
@@ -263,7 +269,7 @@ export default function DashboardPage() {
                       </span>
                       <CountdownBadge
                         deadlineISO={session.deadline}
-                        isClosed={session.status === "closed"}
+                        isClosed={isSessionEffectivelyClosed(session)}
                       />
                     </div>
                     {session.description && (
