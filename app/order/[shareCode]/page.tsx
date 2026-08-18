@@ -255,6 +255,34 @@ export default function PublicMemberOrderPage({
     const current = newCart.get(keyToUse) || { quantity: 0, notes: "" };
     const newQty = Math.max(0, current.quantity + delta);
 
+    // Check limit if increasing quantity
+    if (
+      delta > 0 &&
+      targetItem &&
+      targetItem.limit !== undefined &&
+      targetItem.limit !== null
+    ) {
+      const alreadyOrderedByOthers =
+        snapshotItemOrderedExclMe.get(String(targetItem.id)) ?? 0;
+      const totalIfSubmitted = alreadyOrderedByOthers + newQty;
+      if (totalIfSubmitted > targetItem.limit) {
+        const remaining = Math.max(
+          0,
+          targetItem.limit - alreadyOrderedByOthers - current.quantity,
+        );
+        if (remaining <= 0) {
+          alert(
+            `Sorry, "${targetItem.name}" has reached its per-session limit of ${targetItem.limit}. No more units are available.`,
+          );
+        } else {
+          alert(
+            `Sorry, only ${remaining} more of "${targetItem.name}" is available for this session (limit: ${targetItem.limit} total).`,
+          );
+        }
+        return;
+      }
+    }
+
     if (newQty === 0) {
       newCart.delete(keyToUse);
     } else {
@@ -472,24 +500,53 @@ export default function PublicMemberOrderPage({
   const myCurrentFairShipping =
     myEnrichedOrder?.current_fair_shipping_share ?? 0;
 
+  // Calculate ordered quantities by snapshot_item_id EXCLUDING current member
+  const snapshotItemOrderedExclMe = new Map<string, number>();
+  const myMemberId = existingOrder?.member_id;
+  const myMemberName = memberName?.trim().toLowerCase();
+  allOrders.forEach((o) => {
+    const isMe =
+      (myMemberId && o.member_id === myMemberId) ||
+      (myMemberName && o.member_name.trim().toLowerCase() === myMemberName);
+    if (isMe) return;
+    o.items.forEach((item) => {
+      snapshotItemOrderedExclMe.set(
+        item.snapshot_item_id,
+        (snapshotItemOrderedExclMe.get(item.snapshot_item_id) || 0) +
+          item.quantity,
+      );
+    });
+  });
+
   // Extract Categories
   const categoryNames = Array.from(
     new Set(snapshotItems.map((i) => i.category_name || "General")),
   );
 
-  const availableCount = snapshotItems.filter(
-    (i) => i.is_available !== false,
-  ).length;
-  const soldOutCount = snapshotItems.filter(
-    (i) => i.is_available === false,
-  ).length;
+  const availableCount = snapshotItems.filter((i) => {
+    if (i.is_available === false) return false;
+    if (i.limit !== undefined && i.limit !== null) {
+      const alreadyOrdered = snapshotItemOrderedExclMe.get(String(i.id)) ?? 0;
+      return alreadyOrdered < i.limit;
+    }
+    return true;
+  }).length;
+  const soldOutCount = snapshotItems.length - availableCount;
 
   const filteredItems = snapshotItems.filter((item) => {
     const isAvailable = item.is_available !== false;
+    let hasRemainingStock = true;
+    if (item.limit !== undefined && item.limit !== null) {
+      const alreadyOrdered =
+        snapshotItemOrderedExclMe.get(String(item.id)) ?? 0;
+      hasRemainingStock = alreadyOrdered < item.limit;
+    }
+    const effectivelyAvailable = isAvailable && hasRemainingStock;
+
     const matchesAvailability =
       availabilityFilter === "all" ||
-      (availabilityFilter === "available" && isAvailable) ||
-      (availabilityFilter === "sold_out" && !isAvailable);
+      (availabilityFilter === "available" && effectivelyAvailable) ||
+      (availabilityFilter === "sold_out" && !effectivelyAvailable);
 
     const matchesCat =
       selectedCategory === "All" || item.category_name === selectedCategory;
@@ -1139,11 +1196,33 @@ export default function PublicMemberOrderPage({
                   const quantity = cartVal?.quantity || 0;
                   const isAvailable = item.is_available !== false;
 
+                  // Limit calculations
+                  const hasLimit =
+                    item.limit !== undefined && item.limit !== null;
+                  const alreadyOrderedExclMe =
+                    snapshotItemOrderedExclMe.get(String(item.id)) ?? 0;
+                  const totalReserved = alreadyOrderedExclMe + quantity;
+                  const remainingForMe = hasLimit
+                    ? Math.max(0, (item.limit ?? 0) - alreadyOrderedExclMe)
+                    : null;
+                  const overallRemaining = hasLimit
+                    ? Math.max(0, (item.limit ?? 0) - totalReserved)
+                    : null;
+                  const pct =
+                    hasLimit && (item.limit ?? 0) > 0
+                      ? Math.min(100, (totalReserved / (item.limit ?? 1)) * 100)
+                      : null;
+                  const isFullyBooked =
+                    hasLimit &&
+                    overallRemaining !== null &&
+                    overallRemaining <= 0;
+                  const displaySoldOut = !isAvailable || isFullyBooked;
+
                   return (
                     <div
                       key={item.id}
                       className={`p-4 rounded-2xl border shadow-2xs flex gap-3.5 items-center justify-between transition-colors ${
-                        isAvailable
+                        !displaySoldOut
                           ? "bg-white border-slate-200"
                           : "bg-slate-50/80 border-slate-200/80 opacity-80"
                       }`}
@@ -1154,10 +1233,10 @@ export default function PublicMemberOrderPage({
                             src={item.image}
                             alt={item.name}
                             className={`w-20 h-20 rounded-xl object-cover border shrink-0 ${
-                              !isAvailable ? "grayscale opacity-75" : ""
+                              displaySoldOut ? "grayscale opacity-75" : ""
                             }`}
                           />
-                          {!isAvailable && (
+                          {displaySoldOut && (
                             <div className="absolute inset-0 bg-slate-900/40 rounded-xl flex items-center justify-center">
                               <span className="text-[9px] font-extrabold text-white bg-rose-600 px-1.5 py-0.5 rounded uppercase tracking-wider">
                                 Sold Out
@@ -1170,17 +1249,32 @@ export default function PublicMemberOrderPage({
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3
-                            className={`font-bold text-sm line-clamp-1 ${isAvailable ? "text-slate-900" : "text-slate-500 line-through"}`}
+                            className={`font-bold text-sm line-clamp-1 ${!displaySoldOut ? "text-slate-900" : "text-slate-500 line-through"}`}
                           >
                             {item.name}
                           </h3>
-                          {isAvailable ? (
-                            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
-                              Available
-                            </span>
-                          ) : (
+                          {!isAvailable ? (
                             <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full border border-rose-200 shrink-0">
                               Sold Out
+                            </span>
+                          ) : isFullyBooked ? (
+                            <span className="text-[10px] font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full border border-rose-200 shrink-0">
+                              Fully Booked
+                            </span>
+                          ) : hasLimit ? (
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                                remainingForMe !== null && remainingForMe <= 2
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              }`}
+                            >
+                              {overallRemaining} left
+                              <span className="opacity-60">/ {item.limit}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                              Available
                             </span>
                           )}
                         </div>
@@ -1188,13 +1282,29 @@ export default function PublicMemberOrderPage({
                           {item.description}
                         </p>
                         <div
-                          className={`text-sm font-extrabold ${isAvailable ? "text-orange-600" : "text-slate-400"}`}
+                          className={`text-sm font-extrabold ${!displaySoldOut ? "text-orange-600" : "text-slate-400"}`}
                         >
                           {formatCurrency(item.price)}
                         </div>
 
+                        {hasLimit && pct !== null && isAvailable && (
+                          <div className="w-full max-w-[200px] h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                overallRemaining === 0
+                                  ? "bg-rose-500"
+                                  : remainingForMe !== null &&
+                                      remainingForMe <= 2
+                                    ? "bg-amber-500"
+                                    : "bg-emerald-500"
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        )}
+
                         {/* Custom note field when quantity > 0 */}
-                        {quantity > 0 && isAvailable && (
+                        {quantity > 0 && isAvailable && !isFullyBooked && (
                           <input
                             type="text"
                             value={cartVal?.notes || ""}
@@ -1210,7 +1320,7 @@ export default function PublicMemberOrderPage({
                       {/* Quantity Stepper */}
                       {!isClosed && (
                         <div className="shrink-0">
-                          {!isAvailable ? (
+                          {displaySoldOut ? (
                             <button
                               disabled
                               className="bg-rose-50 text-rose-600 font-bold text-xs px-3 py-2 rounded-xl border border-rose-200 cursor-not-allowed opacity-90"
@@ -1237,7 +1347,12 @@ export default function PublicMemberOrderPage({
                               </span>
                               <button
                                 onClick={() => updateQuantity(item.id, 1)}
-                                className="w-7 h-7 rounded-lg bg-orange-600 text-white font-bold flex items-center justify-center shadow-2xs hover:bg-orange-700 cursor-pointer"
+                                disabled={isFullyBooked}
+                                className={`w-7 h-7 rounded-lg font-bold flex items-center justify-center shadow-2xs cursor-pointer ${
+                                  isFullyBooked
+                                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                                    : "bg-orange-600 text-white hover:bg-orange-700"
+                                }`}
                               >
                                 <Plus className="w-3.5 h-3.5" />
                               </button>

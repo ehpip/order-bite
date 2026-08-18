@@ -32,8 +32,8 @@ export default function NewOrderSessionPage() {
   // Custom Store State
   const [customStoreName, setCustomStoreName] = useState("");
   const [customItems, setCustomItems] = useState<
-    { name: string; price: number; description: string }[]
-  >([{ name: "", price: 0, description: "" }]);
+    { name: string; price: number; description: string; limit?: number }[]
+  >([{ name: "", price: 0, description: "", limit: undefined }]);
 
   // Session Settings
   const [deadlineMinutes, setDeadlineMinutes] = useState<number>(45); // default 45 mins
@@ -65,7 +65,10 @@ export default function NewOrderSessionPage() {
   }, []);
 
   const handleAddCustomItem = () => {
-    setCustomItems([...customItems, { name: "", price: 0, description: "" }]);
+    setCustomItems([
+      ...customItems,
+      { name: "", price: 0, description: "", limit: undefined },
+    ]);
   };
 
   const handleRemoveCustomItem = (index: number) => {
@@ -318,7 +321,7 @@ export default function NewOrderSessionPage() {
                     >
                       <div className="flex items-start gap-2">
                         {/* Inputs */}
-                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[1fr_160px] gap-2">
+                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[1fr_120px_110px] gap-2">
                           {/* Item Name */}
                           <input
                             type="text"
@@ -354,6 +357,29 @@ export default function NewOrderSessionPage() {
                               className="w-full px-3 py-2 pl-9 text-xs border border-slate-200 rounded-lg outline-hidden focus:border-orange-600 focus:ring-1 focus:ring-orange-600/20"
                             />
                           </div>
+
+                          {/* Limit */}
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
+                              Limit
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              placeholder="∞"
+                              value={item.limit ?? ""}
+                              onChange={(e) =>
+                                handleCustomItemChange(
+                                  idx,
+                                  "limit",
+                                  e.target.value === ""
+                                    ? undefined
+                                    : Number(e.target.value),
+                                )
+                              }
+                              className="w-full px-3 py-2 pl-10 text-xs border border-slate-200 rounded-lg outline-hidden focus:border-orange-600 focus:ring-1 focus:ring-orange-600/20"
+                            />
+                          </div>
                         </div>
 
                         {/* Delete */}
@@ -368,6 +394,21 @@ export default function NewOrderSessionPage() {
                           </button>
                         )}
                       </div>
+                      {item.description !== undefined && (
+                        <input
+                          type="text"
+                          placeholder="Description (optional)"
+                          value={item.description}
+                          onChange={(e) =>
+                            handleCustomItemChange(
+                              idx,
+                              "description",
+                              e.target.value,
+                            )
+                          }
+                          className="mt-2 w-full px-3 py-1.5 text-[11px] border border-slate-200 rounded-lg outline-hidden focus:border-orange-600"
+                        />
+                      )}
                     </div>
                   ))}
                 </div>

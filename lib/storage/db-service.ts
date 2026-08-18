@@ -214,6 +214,7 @@ class LocalDatabase {
       const updated: StoreItem = {
         ...this.items[existingIdx],
         ...itemData,
+        limit: itemData.limit,
         updated_at: now,
       };
       this.items[existingIdx] = updated;
@@ -232,6 +233,7 @@ class LocalDatabase {
         sort_order: itemData.sort_order || this.items.length + 1,
         sku: itemData.sku || "",
         tags: itemData.tags || [],
+        limit: itemData.limit,
         created_at: now,
         updated_at: now,
       };
@@ -354,6 +356,7 @@ class LocalDatabase {
       price: item.price,
       image: item.image,
       is_available: item.is_available,
+      limit: item.limit,
       original_item_id: item.id,
     }));
 
@@ -371,6 +374,7 @@ class LocalDatabase {
       description?: string;
       price: number;
       category_name?: string;
+      limit?: number;
     }[],
   ): Promise<{ snapshot: MenuSnapshot; items: MenuSnapshotItem[] }> {
     const snapshotId = `snap-${Date.now()}-${generateShareCode(4)}`;
@@ -388,6 +392,7 @@ class LocalDatabase {
       description: item.description || "",
       price: Number(item.price),
       is_available: true,
+      limit: item.limit,
     }));
 
     this.snapshots.push(snapshot);
@@ -525,6 +530,42 @@ class LocalDatabase {
     });
   }
 
+  private getItemQuantitiesOrdered(
+    sessionId: string,
+    excludeMemberId?: string,
+  ): Map<string, number> {
+    const totals = new Map<string, number>();
+    const sessionOrders = this.orders.filter(
+      (o) =>
+        o.session_id === sessionId &&
+        o.status === "submitted" &&
+        o.member_id !== excludeMemberId,
+    );
+    for (const order of sessionOrders) {
+      for (const item of order.items) {
+        const key = item.snapshot_item_id;
+        totals.set(key, (totals.get(key) || 0) + item.quantity);
+      }
+    }
+    return totals;
+  }
+
+  async updateSnapshotItem(
+    snapshotItemId: string,
+    updates: Partial<MenuSnapshotItem>,
+  ): Promise<MenuSnapshotItem | null> {
+    const idx = this.snapshotItems.findIndex(
+      (i) => String(i.id) === String(snapshotItemId),
+    );
+    if (idx < 0) return null;
+    this.snapshotItems[idx] = {
+      ...this.snapshotItems[idx],
+      ...updates,
+    };
+    this.persistAll();
+    return this.snapshotItems[idx];
+  }
+
   // --- ORDERS ---
   async getOrdersForSession(sessionId: string): Promise<MemberOrder[]> {
     return this.orders.filter((o) => o.session_id === sessionId);
@@ -561,6 +602,11 @@ class LocalDatabase {
     const itemMap = new Map<string, MenuSnapshotItem>();
     snapshotItems.forEach((si) => itemMap.set(si.id, si));
 
+    const existingQuantities = this.getItemQuantitiesOrdered(
+      params.session_id,
+      params.member_id,
+    );
+
     const orderItems: MemberOrderItem[] = [];
     let foodSubtotal = 0;
 
@@ -572,6 +618,23 @@ class LocalDatabase {
       if (!snapItem) continue;
       if (!snapItem.is_available) {
         throw new Error(`Item "${snapItem.name}" is currently unavailable.`);
+      }
+
+      if (snapItem.limit !== undefined && snapItem.limit !== null) {
+        const alreadyOrdered = existingQuantities.get(snapItem.id) || 0;
+        const totalIfSubmitted = alreadyOrdered + reqItem.quantity;
+        if (totalIfSubmitted > snapItem.limit) {
+          const remaining = Math.max(0, snapItem.limit - alreadyOrdered);
+          if (remaining === 0) {
+            throw new Error(
+              `Sorry, "${snapItem.name}" is fully booked. All ${snapItem.limit} units have been reserved by others.`,
+            );
+          } else {
+            throw new Error(
+              `Sorry, only ${remaining} of "${snapItem.name}" are left. You tried to order ${reqItem.quantity}.`,
+            );
+          }
+        }
       }
 
       const itemSubtotal = snapItem.price * reqItem.quantity;
@@ -1006,6 +1069,7 @@ class SupabaseDatabase {
           image: itemData.image || "",
           is_available: itemData.is_available !== false,
           sku: itemData.sku || "",
+          limit: itemData.limit ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", validItemUuid)
@@ -1029,6 +1093,7 @@ class SupabaseDatabase {
           image: itemData.image || "",
           is_available: itemData.is_available !== false,
           sku: itemData.sku || "",
+          limit: itemData.limit ?? null,
         })
         .select()
         .single();
@@ -1170,6 +1235,7 @@ class SupabaseDatabase {
       price: item.price,
       image: item.image || "",
       is_available: item.is_available,
+      limit: item.limit ?? null,
       original_item_id: toValidUuidOrNull(item.id),
     }));
 
@@ -1192,6 +1258,7 @@ class SupabaseDatabase {
       description?: string;
       price: number;
       category_name?: string;
+      limit?: number;
     }[],
   ): Promise<{ snapshot: MenuSnapshot; items: MenuSnapshotItem[] }> {
     const client = this.client;
@@ -1217,6 +1284,7 @@ class SupabaseDatabase {
       description: item.description || "",
       price: Number(item.price),
       is_available: true,
+      limit: item.limit ?? null,
     }));
 
     const { data: itemsData, error: itemsErr } = await client
@@ -1434,6 +1502,54 @@ class SupabaseDatabase {
     });
   }
 
+  private async getItemQuantitiesOrdered(
+    sessionId: string,
+    excludeMemberId?: string,
+  ): Promise<Map<string, number>> {
+    const totals = new Map<string, number>();
+    const allOrders = await this.getOrdersForSession(sessionId);
+    for (const order of allOrders) {
+      if (excludeMemberId && order.member_id === excludeMemberId) continue;
+      if (order.status !== "submitted") continue;
+      for (const item of order.items) {
+        const key = item.snapshot_item_id;
+        totals.set(key, (totals.get(key) || 0) + item.quantity);
+      }
+    }
+    return totals;
+  }
+
+  async updateSnapshotItem(
+    snapshotItemId: string,
+    updates: Partial<MenuSnapshotItem>,
+  ): Promise<MenuSnapshotItem | null> {
+    const client = this.client;
+    if (!client) return localDb.updateSnapshotItem(snapshotItemId, updates);
+    const validUuid = toValidUuidOrNull(snapshotItemId);
+    if (!validUuid) return localDb.updateSnapshotItem(snapshotItemId, updates);
+
+    const safeUpdates: any = {};
+    if ("name" in updates) safeUpdates.name = updates.name;
+    if ("description" in updates)
+      safeUpdates.description = updates.description ?? null;
+    if ("price" in updates) safeUpdates.price = updates.price;
+    if ("is_available" in updates)
+      safeUpdates.is_available = updates.is_available;
+    if ("limit" in updates) safeUpdates.limit = updates.limit ?? null;
+    if ("category_name" in updates)
+      safeUpdates.category_name = updates.category_name;
+
+    const { data, error } = await client
+      .from("menu_snapshot_items")
+      .update(safeUpdates)
+      .eq("id", validUuid)
+      .select()
+      .single();
+    if (error || !data)
+      return localDb.updateSnapshotItem(snapshotItemId, updates);
+    return data as MenuSnapshotItem;
+  }
+
   // --- ORDERS ---
   async getOrdersForSession(sessionId: string): Promise<MemberOrder[]> {
     const client = this.client;
@@ -1504,6 +1620,11 @@ class SupabaseDatabase {
     const itemMap = new Map<string, MenuSnapshotItem>();
     snapshotItems.forEach((si) => itemMap.set(si.id, si));
 
+    const existingQuantities = await this.getItemQuantitiesOrdered(
+      params.session_id,
+      params.member_id,
+    );
+
     let foodSubtotal = 0;
     const itemsToInsert: {
       snapshot_item_id: string;
@@ -1520,6 +1641,23 @@ class SupabaseDatabase {
       if (!snapItem) continue;
       if (!snapItem.is_available)
         throw new Error(`Item "${snapItem.name}" is currently unavailable.`);
+
+      if (snapItem.limit !== undefined && snapItem.limit !== null) {
+        const alreadyOrdered = existingQuantities.get(snapItem.id) || 0;
+        const totalIfSubmitted = alreadyOrdered + reqItem.quantity;
+        if (totalIfSubmitted > snapItem.limit) {
+          const remaining = Math.max(0, snapItem.limit - alreadyOrdered);
+          if (remaining === 0) {
+            throw new Error(
+              `Sorry, "${snapItem.name}" is fully booked. All ${snapItem.limit} units have been reserved by others.`,
+            );
+          } else {
+            throw new Error(
+              `Sorry, only ${remaining} of "${snapItem.name}" are left. You tried to order ${reqItem.quantity}.`,
+            );
+          }
+        }
+      }
 
       const itemSubtotal = snapItem.price * reqItem.quantity;
       foodSubtotal += itemSubtotal;
@@ -1821,6 +1959,9 @@ class DatabaseService {
   }
   getSnapshotItems(snapshotId: string) {
     return this.activeDb.getSnapshotItems(snapshotId);
+  }
+  updateSnapshotItem(snapshotItemId: string, updates: any) {
+    return this.activeDb.updateSnapshotItem(snapshotItemId, updates);
   }
   getSessions(hostId?: string) {
     return this.activeDb.getSessions(hostId);

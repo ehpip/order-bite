@@ -34,6 +34,7 @@ export interface StoreItem {
   sort_order: number;
   sku?: string;
   tags?: string[];
+  limit?: number;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +57,7 @@ export interface MenuSnapshotItem {
   price: number;
   image?: string;
   is_available: boolean;
+  limit?: number;
   original_item_id?: string;
 }
 

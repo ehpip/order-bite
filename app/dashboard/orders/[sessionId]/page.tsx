@@ -22,6 +22,9 @@ import {
   ShieldAlert,
   Pencil,
   Check,
+  ToggleLeft,
+  ToggleRight,
+  Edit3,
 } from "lucide-react";
 import { db, enrichOrdersWithOverpayment } from "@/lib/storage/db-service";
 import {
@@ -66,6 +69,15 @@ export default function SessionManagementPage({
   const [extendMinutes, setExtendMinutes] = useState(30);
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState("");
+
+  // Item limit editing state
+  const [itemLimitsOpen, setItemLimitsOpen] = useState(false);
+  const [editingLimitItem, setEditingLimitItem] = useState<{
+    id: string;
+    name: string;
+    limit?: number;
+    is_available: boolean;
+  } | null>(null);
 
   useEffect(() => {
     // Open share modal automatically if redirected from creation
@@ -165,6 +177,38 @@ export default function SessionManagementPage({
     setEditingDesc(false);
   }
 
+  async function handleSaveItemLimit() {
+    if (!editingLimitItem) return;
+    const limitVal =
+      editingLimitItem.limit === 0
+        ? 0
+        : Number(editingLimitItem.limit) || undefined;
+    const updated = await db.updateSnapshotItem(editingLimitItem.id, {
+      limit: limitVal,
+      is_available: editingLimitItem.is_available,
+    });
+    if (updated) {
+      setSnapshotItems((prev) =>
+        prev.map((i) => (i.id === editingLimitItem.id ? updated : i)),
+      );
+    }
+    setEditingLimitItem(null);
+  }
+
+  async function handleToggleSnapshotItemAvailability(item: MenuSnapshotItem) {
+    if (!isOwner) return;
+    const updated = await db.updateSnapshotItem(item.id, {
+      is_available: !item.is_available,
+    });
+    if (updated) {
+      setSnapshotItems((prev) =>
+        prev.map((i) => (i.id === item.id ? updated : i)),
+      );
+    } else {
+      loadData();
+    }
+  }
+
   if (!session || authLoading) {
     return (
       <div className="p-12 text-center text-slate-500 text-sm">
@@ -243,6 +287,21 @@ export default function SessionManagementPage({
 
   const aggregatedItemList = Array.from(itemAggregationMap.values());
 
+  // Aggregate quantities by snapshot_item_id for limit checking
+  const snapshotItemOrdered = new Map<string, number>();
+  orders.forEach((o) => {
+    o.items.forEach((item) => {
+      snapshotItemOrdered.set(
+        item.snapshot_item_id,
+        (snapshotItemOrdered.get(item.snapshot_item_id) || 0) + item.quantity,
+      );
+    });
+  });
+
+  const limitedItemsCount = snapshotItems.filter(
+    (i) => i.limit !== undefined && i.limit !== null && i.limit > 0,
+  ).length;
+
   return (
     <div className="space-y-6">
       {/* Header Bar */}
@@ -255,6 +314,18 @@ export default function SessionManagementPage({
         </Link>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setItemLimitsOpen(true)}
+            className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-3 py-1.5 rounded-xl text-xs transition-colors cursor-pointer"
+          >
+            <ShoppingBag className="w-3.5 h-3.5 text-orange-600" />
+            Menu Limits
+            {limitedItemsCount > 0 && (
+              <span className="bg-orange-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                {limitedItemsCount}
+              </span>
+            )}
+          </button>
           <button
             onClick={handleDuplicateSession}
             className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-3 py-1.5 rounded-xl text-xs transition-colors cursor-pointer"
@@ -550,23 +621,84 @@ export default function SessionManagementPage({
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {aggregatedItemList.map((item, idx) => (
-              <div
-                key={idx}
-                className="p-4 flex items-center justify-between text-xs sm:text-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="w-7 h-7 rounded-lg bg-orange-100 text-orange-800 font-extrabold text-xs flex items-center justify-center">
-                    {item.quantity}x
-                  </span>
-                  <span className="font-bold text-slate-900">{item.name}</span>
+            {aggregatedItemList.map((item, idx) => {
+              const snapshotMatch = snapshotItems.find(
+                (si) => si.name === item.name,
+              );
+              const alreadyOrdered = snapshotMatch
+                ? (snapshotItemOrdered.get(snapshotMatch.id) ?? 0)
+                : item.quantity;
+              const hasLimit =
+                snapshotMatch &&
+                snapshotMatch.limit !== undefined &&
+                snapshotMatch.limit !== null;
+              const limit = snapshotMatch?.limit;
+              const remaining =
+                hasLimit && typeof limit === "number"
+                  ? Math.max(0, limit - alreadyOrdered)
+                  : null;
+              const pct =
+                hasLimit && typeof limit === "number" && limit > 0
+                  ? Math.min(100, (alreadyOrdered / limit) * 100)
+                  : null;
+              return (
+                <div
+                  key={idx}
+                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between text-xs sm:text-sm gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                      <span className="w-7 h-7 rounded-lg bg-orange-100 text-orange-800 font-extrabold text-xs flex items-center justify-center shrink-0">
+                        {item.quantity}x
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-900">
+                            {item.name}
+                          </span>
+                          {hasLimit && (
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                remaining === 0
+                                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                                  : remaining !== null && remaining <= 2
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              }`}
+                            >
+                              {alreadyOrdered}/{limit}
+                              {remaining === 0
+                                ? " SOLD OUT"
+                                : remaining !== null && remaining <= 2
+                                  ? ` • ${remaining} left`
+                                  : " ordered"}
+                            </span>
+                          )}
+                        </div>
+                        {hasLimit && pct !== null && (
+                          <div className="mt-2 w-full max-w-[260px] h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                remaining === 0
+                                  ? "bg-rose-500"
+                                  : remaining !== null && remaining <= 2
+                                    ? "bg-amber-500"
+                                    : "bg-emerald-500"
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-slate-600 font-semibold sm:text-right">
+                    {formatCurrency(item.total)} (
+                    {formatCurrency(item.unitPrice)} each)
+                  </div>
                 </div>
-                <div className="text-slate-600 font-semibold">
-                  {formatCurrency(item.total)} ({formatCurrency(item.unitPrice)}{" "}
-                  each)
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -773,6 +905,260 @@ export default function SessionManagementPage({
                   Confirm Extension
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Menu Limits Management Modal */}
+      {itemLimitsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col relative">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2">
+                  <ShoppingBag className="w-5 h-5 text-orange-600" />
+                  Session Menu Limits
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Set per-session quantity caps. Leave blank for unlimited.
+                </p>
+              </div>
+              <button
+                onClick={() => setItemLimitsOpen(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-6 space-y-2">
+              {snapshotItems.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500">
+                  No menu items in this session.
+                </div>
+              ) : (
+                snapshotItems.map((item) => {
+                  const alreadyOrdered = snapshotItemOrdered.get(item.id) ?? 0;
+                  const hasLimit =
+                    item.limit !== undefined && item.limit !== null;
+                  const remaining = hasLimit
+                    ? Math.max(0, (item.limit ?? 0) - alreadyOrdered)
+                    : null;
+                  const pct =
+                    hasLimit && (item.limit ?? 0) > 0
+                      ? Math.min(
+                          100,
+                          (alreadyOrdered / (item.limit ?? 1)) * 100,
+                        )
+                      : null;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-4 rounded-2xl border transition-all ${
+                        !item.is_available
+                          ? "bg-slate-50 border-slate-200 opacity-70"
+                          : "bg-white border-slate-200 hover:border-orange-200"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-slate-900 text-sm">
+                              {item.name}
+                            </h4>
+                            {hasLimit && (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  remaining === 0
+                                    ? "bg-rose-50 text-rose-700 border-rose-200"
+                                    : remaining !== null && remaining <= 2
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                }`}
+                              >
+                                {alreadyOrdered}/{item.limit}
+                                {remaining === 0
+                                  ? " SOLD OUT"
+                                  : remaining !== null
+                                    ? ` • ${remaining} left`
+                                    : ""}
+                              </span>
+                            )}
+                            {!hasLimit && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
+                                Unlimited
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {formatCurrency(item.price)} each
+                          </p>
+                          {hasLimit && pct !== null && (
+                            <div className="mt-2 w-full max-w-[300px] h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  remaining === 0
+                                    ? "bg-rose-500"
+                                    : remaining !== null && remaining <= 2
+                                      ? "bg-amber-500"
+                                      : "bg-emerald-500"
+                                }`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() =>
+                              handleToggleSnapshotItemAvailability(item)
+                            }
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              item.is_available
+                                ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                            }`}
+                            title={
+                              item.is_available
+                                ? "Mark unavailable"
+                                : "Mark available"
+                            }
+                          >
+                            {item.is_available ? (
+                              <ToggleRight className="w-5 h-5" />
+                            ) : (
+                              <ToggleLeft className="w-5 h-5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() =>
+                              setEditingLimitItem({
+                                id: item.id,
+                                name: item.name,
+                                limit: item.limit,
+                                is_available: item.is_available,
+                              })
+                            }
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 cursor-pointer transition-colors"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            Edit Limit
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="p-5 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => setItemLimitsOpen(false)}
+                className="px-4 py-2 text-xs font-bold bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Item Limit Modal */}
+      {editingLimitItem && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 relative">
+            <button
+              onClick={() => setEditingLimitItem(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">
+                Edit Item Limit
+              </h3>
+              <p className="text-sm font-semibold text-orange-600 mt-1">
+                {editingLimitItem.name}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-800 block mb-1.5">
+                  Per-Session Quantity Limit
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Leave blank for unlimited"
+                    value={
+                      editingLimitItem.limit === undefined
+                        ? ""
+                        : editingLimitItem.limit
+                    }
+                    onChange={(e) =>
+                      setEditingLimitItem({
+                        ...editingLimitItem,
+                        limit:
+                          e.target.value === ""
+                            ? undefined
+                            : Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl outline-hidden focus:border-orange-600 focus:ring-2 focus:ring-orange-600/15"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  The total quantity ordered by all members combined cannot
+                  exceed this number. Set 0 to block new orders for this item.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div>
+                  <p className="text-xs font-bold text-slate-800">
+                    Item Available
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Toggle off to hide from members
+                  </p>
+                </div>
+                <button
+                  onClick={() =>
+                    setEditingLimitItem({
+                      ...editingLimitItem,
+                      is_available: !editingLimitItem.is_available,
+                    })
+                  }
+                  className={`w-12 h-7 rounded-full transition-colors cursor-pointer relative ${
+                    editingLimitItem.is_available
+                      ? "bg-emerald-500"
+                      : "bg-slate-300"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-all ${
+                      editingLimitItem.is_available ? "left-[22px]" : "left-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={() => setEditingLimitItem(null)}
+                className="px-4 py-2 text-xs font-semibold bg-slate-100 text-slate-700 rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveItemLimit}
+                className="px-5 py-2 text-xs font-bold bg-orange-600 text-white rounded-xl hover:bg-orange-700 cursor-pointer"
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>

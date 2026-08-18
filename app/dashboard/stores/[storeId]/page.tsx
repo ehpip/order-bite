@@ -1,23 +1,39 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, use } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, Plus, FileSpreadsheet, Tag, Trash2, Edit2, Check, X, Search, Image as ImageIcon, ShieldCheck } from 'lucide-react';
-import { db } from '@/lib/storage/db-service';
-import { Store, StoreCategory, StoreItem } from '@/lib/types';
-import { formatCurrency } from '@/lib/formatters';
-import ImportMenuModal from '@/components/import-menu-modal';
-import { useAuth } from '@/lib/auth-context';
+import React, { useEffect, useState, use } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Plus,
+  FileSpreadsheet,
+  Tag,
+  Trash2,
+  Edit2,
+  Check,
+  X,
+  Search,
+  Image as ImageIcon,
+  ShieldCheck,
+} from "lucide-react";
+import { db } from "@/lib/storage/db-service";
+import { Store, StoreCategory, StoreItem } from "@/lib/types";
+import { formatCurrency } from "@/lib/formatters";
+import ImportMenuModal from "@/components/import-menu-modal";
+import { useAuth } from "@/lib/auth-context";
 
-export default function StoreDetailPage({ params }: { params: Promise<{ storeId: string }> }) {
+export default function StoreDetailPage({
+  params,
+}: {
+  params: Promise<{ storeId: string }>;
+}) {
   const { storeId } = use(params);
   const { user, isAdmin, loginWithGoogle } = useAuth();
 
   const [store, setStore] = useState<Store | null>(null);
   const [categories, setCategories] = useState<StoreCategory[]>([]);
   const [items, setItems] = useState<StoreItem[]>([]);
-  const [selectedCatId, setSelectedCatId] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  const [selectedCatId, setSelectedCatId] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
   // Modals state
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -25,8 +41,10 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
   const [catModalOpen, setCatModalOpen] = useState(false);
 
   // Form states
-  const [newCatName, setNewCatName] = useState('');
-  const [editingItem, setEditingItem] = useState<Partial<StoreItem> | null>(null);
+  const [newCatName, setNewCatName] = useState("");
+  const [editingItem, setEditingItem] = useState<Partial<StoreItem> | null>(
+    null,
+  );
 
   useEffect(() => {
     loadData();
@@ -52,7 +70,7 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
     }
     if (!newCatName.trim()) return;
     await db.saveCategory(storeId, newCatName.trim());
-    setNewCatName('');
+    setNewCatName("");
     setCatModalOpen(false);
     loadData();
   }
@@ -63,9 +81,13 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
       loginWithGoogle();
       return;
     }
-    if (confirm(`Delete category "${name}"? Items under this category will become general.`)) {
+    if (
+      confirm(
+        `Delete category "${name}"? Items under this category will become general.`,
+      )
+    ) {
       await db.deleteCategory(catId);
-      if (selectedCatId === catId) setSelectedCatId('all');
+      if (selectedCatId === catId) setSelectedCatId("all");
       loadData();
     }
   }
@@ -79,11 +101,15 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
     }
     if (!editingItem || !editingItem.name || !editingItem.price) return;
 
+    const limitVal =
+      editingItem.limit === 0 ? 0 : Number(editingItem.limit) || undefined;
+
     await db.saveItem({
       ...editingItem,
       store_id: storeId,
       name: editingItem.name,
       price: Number(editingItem.price),
+      limit: limitVal,
     });
 
     setEditingItem(null);
@@ -125,9 +151,12 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
   }
 
   const filteredItems = items.filter((item) => {
-    const matchesCat = selectedCatId === 'all' || item.category_id === selectedCatId;
-    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
-      (item.description && item.description.toLowerCase().includes(search.toLowerCase()));
+    const matchesCat =
+      selectedCatId === "all" || item.category_id === selectedCatId;
+    const matchesSearch =
+      item.name.toLowerCase().includes(search.toLowerCase()) ||
+      (item.description &&
+        item.description.toLowerCase().includes(search.toLowerCase()));
     return matchesCat && matchesSearch;
   });
 
@@ -138,7 +167,9 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
         <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl flex items-center justify-between text-xs sm:text-sm text-emerald-900">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-            <span>Authenticated as <strong>{user?.email}</strong> (Store Admin)</span>
+            <span>
+              Authenticated as <strong>{user?.email}</strong> (Store Admin)
+            </span>
           </div>
           <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
             Editing Enabled
@@ -177,14 +208,23 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
         )}
       </div>
 
-
       {/* Store Header Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
         <div className="relative h-36 bg-slate-200">
-          {store.cover_image && <img src={store.cover_image} alt={store.name} className="w-full h-full object-cover" />}
+          {store.cover_image && (
+            <img
+              src={store.cover_image}
+              alt={store.name}
+              className="w-full h-full object-cover"
+            />
+          )}
           {store.logo && (
             <div className="absolute -bottom-5 left-6 w-16 h-16 bg-white rounded-2xl p-1 border border-slate-200 shadow-md">
-              <img src={store.logo} alt={store.name} className="w-full h-full object-cover rounded-xl" />
+              <img
+                src={store.logo}
+                alt={store.name}
+                className="w-full h-full object-cover rounded-xl"
+              />
             </div>
           )}
         </div>
@@ -192,8 +232,12 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
         <div className="p-6 pt-8 space-y-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">{store.name}</h1>
-              <p className="text-xs sm:text-sm text-slate-500">{store.description || 'No description'}</p>
+              <h1 className="text-2xl font-bold text-slate-900">
+                {store.name}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500">
+                {store.description || "No description"}
+              </p>
             </div>
             <span className="self-start sm:self-auto px-3 py-1 rounded-full text-xs font-bold uppercase bg-emerald-100 text-emerald-800">
               {store.status}
@@ -214,24 +258,28 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
           {/* Category Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             <button
-              onClick={() => setSelectedCatId('all')}
+              onClick={() => setSelectedCatId("all")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
-                selectedCatId === 'all'
-                  ? 'bg-orange-600 text-white'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                selectedCatId === "all"
+                  ? "bg-orange-600 text-white"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700"
               }`}
             >
               All Items ({items.length})
             </button>
             {categories.map((cat) => {
-              const catCount = items.filter((i) => i.category_id === cat.id).length;
+              const catCount = items.filter(
+                (i) => i.category_id === cat.id,
+              ).length;
               const active = selectedCatId === cat.id;
               return (
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCatId(cat.id)}
                   className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
-                    active ? 'bg-orange-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    active
+                      ? "bg-orange-600 text-white"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                   }`}
                 >
                   {cat.name} ({catCount})
@@ -270,13 +318,17 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredItems.map((item) => {
-            const catName = categories.find((c) => c.id === item.category_id)?.name || 'General';
+            const catName =
+              categories.find((c) => c.id === item.category_id)?.name ||
+              "General";
 
             return (
               <div
                 key={item.id}
                 className={`bg-white rounded-2xl border p-4 shadow-2xs flex flex-col justify-between space-y-3 transition-all ${
-                  item.is_available ? 'border-slate-200' : 'border-slate-200 opacity-60 bg-slate-50'
+                  item.is_available
+                    ? "border-slate-200"
+                    : "border-slate-200 opacity-60 bg-slate-50"
                 }`}
               >
                 <div className="flex gap-3">
@@ -294,15 +346,28 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
 
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-start justify-between gap-1">
-                      <h3 className="font-bold text-sm text-slate-900 line-clamp-1">{item.name}</h3>
+                      <h3 className="font-bold text-sm text-slate-900 line-clamp-1">
+                        {item.name}
+                      </h3>
                       <span className="text-xs font-extrabold text-orange-600 shrink-0">
                         {formatCurrency(item.price)}
                       </span>
                     </div>
-                    <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-600">
-                      {catName}
-                    </span>
-                    <p className="text-xs text-slate-500 line-clamp-2">{item.description || 'No description'}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-600">
+                        {catName}
+                      </span>
+                      {item.limit !== undefined &&
+                        item.limit !== null &&
+                        item.limit > 0 && (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-amber-50 text-[10px] font-bold text-amber-700 border border-amber-200">
+                            Limit: {item.limit} / session
+                          </span>
+                        )}
+                    </div>
+                    <p className="text-xs text-slate-500 line-clamp-2">
+                      {item.description || "No description"}
+                    </p>
                   </div>
                 </div>
 
@@ -312,11 +377,11 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
                     disabled={!isAdmin}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${
                       item.is_available
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-rose-100 text-rose-800'
-                    } ${isAdmin ? 'hover:bg-emerald-200 cursor-pointer' : 'opacity-80 cursor-default'}`}
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-rose-100 text-rose-800"
+                    } ${isAdmin ? "hover:bg-emerald-200 cursor-pointer" : "opacity-80 cursor-default"}`}
                   >
-                    {item.is_available ? 'Available' : 'Unavailable'}
+                    {item.is_available ? "Available" : "Unavailable"}
                   </button>
 
                   {isAdmin && (
@@ -357,10 +422,14 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
             >
               <X className="w-5 h-5" />
             </button>
-            <h3 className="font-bold text-slate-900 text-base">Add Menu Category</h3>
+            <h3 className="font-bold text-slate-900 text-base">
+              Add Menu Category
+            </h3>
             <form onSubmit={handleAddCategory} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Category Name</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Category Name
+                </label>
                 <input
                   type="text"
                   required
@@ -405,17 +474,21 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
             </button>
 
             <h3 className="font-bold text-slate-900 text-base">
-              {editingItem?.id ? 'Edit Menu Item' : 'Add New Menu Item'}
+              {editingItem?.id ? "Edit Menu Item" : "Add New Menu Item"}
             </h3>
 
             <form onSubmit={handleSaveItem} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Item Name *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Item Name *
+                </label>
                 <input
                   type="text"
                   required
-                  value={editingItem?.name || ''}
-                  onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                  value={editingItem?.name || ""}
+                  onChange={(e) =>
+                    setEditingItem({ ...editingItem, name: e.target.value })
+                  }
                   placeholder="e.g. Big Mac, French Fries, Iced Latte"
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600"
                 />
@@ -423,22 +496,36 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Price (Rp) *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Price (Rp) *
+                  </label>
                   <input
                     type="number"
                     required
-                    value={editingItem?.price || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
+                    value={editingItem?.price || ""}
+                    onChange={(e) =>
+                      setEditingItem({
+                        ...editingItem,
+                        price: Number(e.target.value),
+                      })
+                    }
                     placeholder="45000"
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Category
+                  </label>
                   <select
-                    value={editingItem?.category_id || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, category_id: e.target.value || undefined })}
+                    value={editingItem?.category_id || ""}
+                    onChange={(e) =>
+                      setEditingItem({
+                        ...editingItem,
+                        category_id: e.target.value || undefined,
+                      })
+                    }
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white outline-hidden"
                   >
                     <option value="">Select Category</option>
@@ -452,25 +539,65 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Description</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Description
+                </label>
                 <textarea
                   rows={2}
-                  value={editingItem?.description || ''}
-                  onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
+                  value={editingItem?.description || ""}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      description: e.target.value,
+                    })
+                  }
                   placeholder="Item ingredients or description..."
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Image URL</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Image URL
+                </label>
                 <input
                   type="url"
-                  value={editingItem?.image || ''}
-                  onChange={(e) => setEditingItem({ ...editingItem, image: e.target.value })}
+                  value={editingItem?.image || ""}
+                  onChange={(e) =>
+                    setEditingItem({ ...editingItem, image: e.target.value })
+                  }
                   placeholder="https://images.unsplash.com/..."
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Per-Session Item Limit{" "}
+                  <span className="text-slate-400 font-normal">
+                    (optional, blank = unlimited)
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editingItem?.limit ?? ""}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      limit:
+                        e.target.value === ""
+                          ? undefined
+                          : Number(e.target.value),
+                    })
+                  }
+                  placeholder="e.g. 10 — max units per order session"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  When a host creates a session using this item, this limit will
+                  apply as the default. Hosts can override it per-session.
+                </p>
               </div>
 
               <div className="flex items-center gap-2 pt-2">
@@ -478,10 +605,18 @@ export default function StoreDetailPage({ params }: { params: Promise<{ storeId:
                   type="checkbox"
                   id="is_avail"
                   checked={editingItem?.is_available !== false}
-                  onChange={(e) => setEditingItem({ ...editingItem, is_available: e.target.checked })}
+                  onChange={(e) =>
+                    setEditingItem({
+                      ...editingItem,
+                      is_available: e.target.checked,
+                    })
+                  }
                   className="w-4 h-4 text-orange-600 rounded"
                 />
-                <label htmlFor="is_avail" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                <label
+                  htmlFor="is_avail"
+                  className="text-xs font-semibold text-slate-700 cursor-pointer"
+                >
                   Item is currently available for ordering
                 </label>
               </div>
