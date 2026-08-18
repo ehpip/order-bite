@@ -429,6 +429,7 @@ class LocalDatabase {
 
   async createSession(sessionData: {
     name: string;
+    description?: string;
     store_id?: string;
     snapshot_id: string;
     deadline: string;
@@ -454,6 +455,7 @@ class LocalDatabase {
       store_id: sessionData.store_id,
       menu_snapshot_id: sessionData.snapshot_id,
       name: sessionData.name,
+      description: sessionData.description,
       share_code: shareCode,
       status: "open",
       deadline: sessionData.deadline,
@@ -506,6 +508,7 @@ class LocalDatabase {
 
     return this.createSession({
       name: newName,
+      description: original.description,
       store_id: original.store_id,
       snapshot_id: original.menu_snapshot_id,
       deadline: newDeadlineISO,
@@ -1308,6 +1311,7 @@ class SupabaseDatabase {
 
   async createSession(sessionData: {
     name: string;
+    description?: string;
     store_id?: string;
     snapshot_id: string;
     deadline: string;
@@ -1341,6 +1345,7 @@ class SupabaseDatabase {
         store_id: toValidUuidOrNull(sessionData.store_id),
         menu_snapshot_id: validMenuSnapshotUuid,
         name: sessionData.name,
+        description: sessionData.description || null,
         share_code: localSession.share_code,
         status: "open",
         deadline: sessionData.deadline,
@@ -1412,6 +1417,7 @@ class SupabaseDatabase {
     if (!original) return null;
     return this.createSession({
       name: newName,
+      description: original.description,
       store_id: original.store_id,
       snapshot_id: original.menu_snapshot_id,
       deadline: newDeadlineISO,

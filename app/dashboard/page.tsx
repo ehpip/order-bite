@@ -215,6 +215,11 @@ export default function DashboardPage() {
                         isClosed={session.status === "closed"}
                       />
                     </div>
+                    {session.description && (
+                      <p className="text-xs text-slate-500 line-clamp-1 sm:line-clamp-2">
+                        {session.description}
+                      </p>
+                    )}
                     <div className="flex items-center gap-3 text-xs text-slate-500">
                       <span>Deadline: {formatDate(session.deadline)}</span>
                       <span>•</span>

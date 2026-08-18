@@ -25,6 +25,7 @@ export default function NewOrderSessionPage() {
 
   // Form State
   const [orderName, setOrderName] = useState("Friday Office Lunch 🍔");
+  const [description, setDescription] = useState("");
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [isCustomStore, setIsCustomStore] = useState(false);
 
@@ -123,6 +124,7 @@ export default function NewOrderSessionPage() {
       // Create Session
       const session = await db.createSession({
         name: orderName,
+        description: description.trim() || undefined,
         store_id: isCustomStore ? undefined : selectedStoreId,
         snapshot_id: snapshotId,
         deadline: deadlineISO,
@@ -202,6 +204,22 @@ export default function NewOrderSessionPage() {
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">
+              Description (Optional)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Lunch for the marketing team, arriving around 12pm"
+              rows={2}
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600 resize-y"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">
+              Add context or notes about this order for your group members.
+            </p>
           </div>
         </div>
 

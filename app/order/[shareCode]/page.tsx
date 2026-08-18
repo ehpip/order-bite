@@ -510,7 +510,7 @@ export default function PublicMemberOrderPage({
             <div className="w-9 h-9 rounded-xl bg-orange-600 flex items-center justify-center text-white font-bold">
               <Utensils className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="font-bold text-sm text-slate-900 leading-snug line-clamp-1">
                 {session.name}
               </h1>
@@ -527,6 +527,15 @@ export default function PublicMemberOrderPage({
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         {!nameSubmitted ? (
           <>
+            {/* Session Description */}
+            {session.description && (
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  {session.description}
+                </p>
+              </div>
+            )}
+
             {/* Participants Section (shown before the name form) */}
             {session && (
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">

@@ -71,6 +71,7 @@ export interface OrderSession {
   store_id?: string;
   menu_snapshot_id: string;
   name: string;
+  description?: string;
   share_code: string;
   status: SessionStatus;
   deadline: string; // ISO String

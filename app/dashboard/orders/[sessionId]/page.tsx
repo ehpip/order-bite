@@ -20,6 +20,8 @@ import {
   CreditCard,
   X,
   ShieldAlert,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { db, enrichOrdersWithOverpayment } from "@/lib/storage/db-service";
 import {
@@ -62,6 +64,8 @@ export default function SessionManagementPage({
   const [shareOpen, setShareOpen] = useState(false);
   const [extendOpen, setExtendOpen] = useState(false);
   const [extendMinutes, setExtendMinutes] = useState(30);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState("");
 
   useEffect(() => {
     // Open share modal automatically if redirected from creation
@@ -143,6 +147,22 @@ export default function SessionManagementPage({
     if (newSess) {
       window.location.href = `/dashboard/orders/${newSess.id}?share=true`;
     }
+  }
+
+  function handleStartEditDesc() {
+    setDescDraft(session?.description || "");
+    setEditingDesc(true);
+  }
+
+  async function handleSaveDesc() {
+    if (!session || !isOwner) return;
+    const updated = await db.updateSession(session.id, {
+      description: descDraft.trim() || undefined,
+    });
+    if (updated) {
+      setSession(updated);
+    }
+    setEditingDesc(false);
   }
 
   if (!session || authLoading) {
@@ -255,7 +275,7 @@ export default function SessionManagementPage({
       {/* Main Title & Status Control Card */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-2xl font-bold text-slate-900">
                 {session.name}
@@ -265,7 +285,57 @@ export default function SessionManagementPage({
                 isClosed={session.status === "closed"}
               />
             </div>
-            <p className="text-xs text-slate-500 flex items-center gap-2">
+
+            {editingDesc ? (
+              <div className="mt-2 space-y-2">
+                <textarea
+                  value={descDraft}
+                  onChange={(e) => setDescDraft(e.target.value)}
+                  placeholder="Add description about this order..."
+                  rows={2}
+                  autoFocus
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-hidden focus:border-orange-600 resize-y"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveDesc}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingDesc(false)}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 mt-1">
+                {session.description ? (
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed flex-1 min-w-0">
+                    {session.description}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 italic flex-1">
+                    No description added yet.
+                  </p>
+                )}
+                {isOwner && (
+                  <button
+                    onClick={handleStartEditDesc}
+                    className="shrink-0 p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors cursor-pointer"
+                    title="Edit description"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <p className="text-xs text-slate-500 flex items-center gap-2 mt-2">
               <span>
                 Store: <strong>{snapshot?.store_name || "Restaurant"}</strong>
               </span>

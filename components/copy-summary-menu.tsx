@@ -50,6 +50,9 @@ export default function CopySummaryMenu({
     const grandTotal = totalFood + session.shipping_cost;
 
     let text = `🍔 *${session.name.toUpperCase()}* — ${storeName || "Restaurant"}\n`;
+    if (session.description) {
+      text += `📝 ${session.description}\n`;
+    }
     text += `──────────────\n`;
     itemMap.forEach((qty, itemName) => {
       text += `• ${itemName} × ${qty}\n`;
@@ -66,6 +69,9 @@ export default function CopySummaryMenu({
   // 2. Member Breakdown
   const generateMemberSummary = () => {
     let text = `📋 *${session.name} — Member Orders*\n`;
+    if (session.description) {
+      text += `📝 ${session.description}\n`;
+    }
     text += `──────────────\n`;
     orders.forEach((o) => {
       text += `*${o.member_name}* (${formatCurrency(o.grand_total)}):\n`;
@@ -131,6 +137,9 @@ export default function CopySummaryMenu({
         ? `${window.location.origin}/order/${session.share_code}`
         : `/order/${session.share_code}`;
     let text = `⏰ *Reminder: ${session.name}*\n\n`;
+    if (session.description) {
+      text += `📝 ${session.description}\n\n`;
+    }
     text += `Ordering closes soon (${formatDate(session.deadline)}).\n\n`;
     text += `If you haven't placed your food order yet, click here to choose:\n${shareUrl}\n\n`;
     text += `Don't miss out! 🍔🍟`;

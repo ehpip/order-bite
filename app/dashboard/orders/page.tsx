@@ -59,7 +59,9 @@ export default function SessionsListPage() {
   const filteredSessions = sessions.filter((s) => {
     const matchesSearch =
       s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.share_code.toLowerCase().includes(search.toLowerCase());
+      s.share_code.toLowerCase().includes(search.toLowerCase()) ||
+      (s.description &&
+        s.description.toLowerCase().includes(search.toLowerCase()));
     const matchesStatus = statusFilter === "all" || s.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -149,6 +151,12 @@ export default function SessionsListPage() {
                       #{session.share_code}
                     </span>
                   </div>
+
+                  {session.description && (
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                      {session.description}
+                    </p>
+                  )}
 
                   <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
                     <span className="flex items-center gap-1">

@@ -187,6 +187,11 @@ export default function HomePage() {
                     </h3>
                     <CountdownBadge deadlineISO={session.deadline} />
                   </div>
+                  {session.description && (
+                    <p className="text-xs text-slate-500 line-clamp-2 mb-2 leading-relaxed">
+                      {session.description}
+                    </p>
+                  )}
                   <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-3">
                     <Users className="w-3.5 h-3.5 text-slate-400" />
                     Host:{" "}
