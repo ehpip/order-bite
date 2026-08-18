@@ -21,6 +21,7 @@ import { formatCurrency, formatShippingCost } from "@/lib/formatters";
 import CountdownBadge from "@/components/ui/countdown-badge";
 import { useAuth } from "@/lib/auth-context";
 import { getInitials, getAvatarColor } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type SessionWithParticipants = OrderSession & {
   participants: MemberOrder[];
@@ -32,9 +33,11 @@ export default function HomePage() {
     SessionWithParticipants[]
   >([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
+      setDataLoading(true);
       const allSessions = await db.getSessions();
       const openSessions = allSessions.filter((s) => s.status === "open");
 
@@ -50,6 +53,7 @@ export default function HomePage() {
 
       const allStores = await db.getStores();
       setStores(allStores.slice(0, 4));
+      setDataLoading(false);
     }
     loadData();
   }, []);
@@ -160,7 +164,51 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {activeSessions.length === 0 ? (
+        {dataLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between space-y-4"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-5/6" />
+                  <Skeleton className="h-3 w-32" />
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2">
+                    <div className="flex justify-between">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                    <div className="flex justify-between">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 pt-1">
+                    <div className="flex -space-x-2">
+                      {Array.from({ length: 3 }).map((_, j) => (
+                        <Skeleton
+                          key={j}
+                          className="h-7 w-7 rounded-full border-2 border-white"
+                        />
+                      ))}
+                    </div>
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                  <Skeleton className="h-9 flex-1 rounded-xl" />
+                  <Skeleton className="h-9 w-20 rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : activeSessions.length === 0 ? (
           <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-3">
             <Utensils className="w-8 h-8 text-slate-400 mx-auto" />
             <p className="text-slate-600 font-medium text-sm">
@@ -292,49 +340,71 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {stores.map((store) => (
-              <div
-                key={store.id}
-                className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
-              >
-                <div className="relative h-28 bg-slate-200">
-                  {store.cover_image && (
-                    <img
-                      src={store.cover_image}
-                      alt={store.name}
-                      className="w-full h-full object-cover"
-                    />
-                  )}
-                  {store.logo && (
-                    <div className="absolute -bottom-4 left-4 w-10 h-10 rounded-xl bg-white p-1 border border-slate-200 shadow-2xs">
-                      <img
-                        src={store.logo}
-                        alt={store.name}
-                        className="w-full h-full object-cover rounded-lg"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-4 pt-6 space-y-2 flex-1">
-                  <h3 className="font-bold text-sm text-slate-900 line-clamp-1">
-                    {store.name}
-                  </h3>
-                  <p className="text-xs text-slate-500 line-clamp-2">
-                    {store.description}
-                  </p>
-                </div>
-
-                <div className="p-4 pt-0">
-                  <Link
-                    href={`/dashboard/stores/${store.id}`}
-                    className="block w-full bg-white hover:bg-slate-100 text-slate-800 font-semibold text-xs py-2 rounded-xl text-center border border-slate-200 transition-colors"
+            {dataLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden shadow-2xs flex flex-col justify-between"
                   >
-                    View Menu Items
-                  </Link>
-                </div>
-              </div>
-            ))}
+                    <div className="relative">
+                      <Skeleton className="h-28 w-full rounded-none" />
+                      <div className="absolute -bottom-4 left-4">
+                        <Skeleton className="h-10 w-10 rounded-xl border border-slate-200" />
+                      </div>
+                    </div>
+                    <div className="p-4 pt-6 space-y-2 flex-1">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-5/6" />
+                    </div>
+                    <div className="p-4 pt-0">
+                      <Skeleton className="h-8 w-full rounded-xl" />
+                    </div>
+                  </div>
+                ))
+              : stores.map((store) => (
+                  <div
+                    key={store.id}
+                    className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div className="relative h-28 bg-slate-200">
+                      {store.cover_image && (
+                        <img
+                          src={store.cover_image}
+                          alt={store.name}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                      {store.logo && (
+                        <div className="absolute -bottom-4 left-4 w-10 h-10 rounded-xl bg-white p-1 border border-slate-200 shadow-2xs">
+                          <img
+                            src={store.logo}
+                            alt={store.name}
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-4 pt-6 space-y-2 flex-1">
+                      <h3 className="font-bold text-sm text-slate-900 line-clamp-1">
+                        {store.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 line-clamp-2">
+                        {store.description}
+                      </p>
+                    </div>
+
+                    <div className="p-4 pt-0">
+                      <Link
+                        href={`/dashboard/stores/${store.id}`}
+                        className="block w-full bg-white hover:bg-slate-100 text-slate-800 font-semibold text-xs py-2 rounded-xl text-center border border-slate-200 transition-colors"
+                      >
+                        View Menu Items
+                      </Link>
+                    </div>
+                  </div>
+                ))}
           </div>
         </div>
       </section>
