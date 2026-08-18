@@ -1,46 +1,67 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Store as StoreIcon, PlusCircle, Search, Filter, Trash2, ArrowRight, ShieldCheck, FileSpreadsheet } from 'lucide-react';
-import { db } from '@/lib/storage/db-service';
-import { Store } from '@/lib/types';
-import { useAuth } from '@/lib/auth-context';
-import ImportMenuModal from '@/components/import-menu-modal';
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  Store as StoreIcon,
+  PlusCircle,
+  Search,
+  Filter,
+  Trash2,
+  ArrowRight,
+  ShieldCheck,
+  FileSpreadsheet,
+} from "lucide-react";
+import { db } from "@/lib/storage/db-service";
+import { Store } from "@/lib/types";
+import { useAuth } from "@/lib/auth-context";
+import ImportMenuModal from "@/components/import-menu-modal";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StoresPage() {
   const { user, isAdmin, loginWithGoogle } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "archived"
+  >("all");
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     loadStores();
   }, []);
 
   async function loadStores() {
+    setDataLoading(true);
     const list = await db.getStores();
     setStores(list);
+    setDataLoading(false);
   }
 
   async function handleDeleteStore(id: string, name: string) {
     if (!isAdmin) {
-      alert(`Store database management is restricted to authorized administrators.`);
+      alert(
+        `Store database management is restricted to authorized administrators.`,
+      );
       loginWithGoogle();
       return;
     }
-    if (confirm(`Are you sure you want to delete or archive store "${name}"?`)) {
+    if (
+      confirm(`Are you sure you want to delete or archive store "${name}"?`)
+    ) {
       await db.deleteStore(id);
       loadStores();
     }
   }
 
   const filteredStores = stores.filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
-      (s.description && s.description.toLowerCase().includes(search.toLowerCase()));
-    const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
+    const matchesSearch =
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      (s.description &&
+        s.description.toLowerCase().includes(search.toLowerCase()));
+    const matchesStatus = statusFilter === "all" || s.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -51,7 +72,9 @@ export default function StoresPage() {
         <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl flex items-center justify-between text-xs sm:text-sm text-emerald-900">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-            <span>Authenticated as <strong>{user?.email}</strong> (Store Admin)</span>
+            <span>
+              Authenticated as <strong>{user?.email}</strong> (Store Admin)
+            </span>
           </div>
           <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
             Admin Access Active
@@ -61,9 +84,12 @@ export default function StoresPage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Food Stores</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            Food Stores
+          </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Reusable restaurant and menu database for group food ordering sessions.
+            Reusable restaurant and menu database for group food ordering
+            sessions.
           </p>
         </div>
 
@@ -90,7 +116,12 @@ export default function StoresPage() {
       {toastMsg && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-between">
           <span>{toastMsg}</span>
-          <button onClick={() => setToastMsg(null)} className="text-emerald-600 hover:text-emerald-900 font-extrabold ml-2">×</button>
+          <button
+            onClick={() => setToastMsg(null)}
+            className="text-emerald-600 hover:text-emerald-900 font-extrabold ml-2"
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -122,7 +153,34 @@ export default function StoresPage() {
       </div>
 
       {/* Stores List Grid */}
-      {filteredStores.length === 0 ? (
+      {dataLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden flex flex-col justify-between"
+            >
+              <Skeleton className="h-32 w-full rounded-none" />
+              <div className="p-5 pt-7 space-y-2.5 flex-1 relative">
+                <div className="absolute -top-4 left-4">
+                  <Skeleton className="h-12 w-12 rounded-xl" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-14 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="h-3 w-40" />
+              </div>
+              <div className="p-4 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-2">
+                <Skeleton className="h-8 flex-1 rounded-xl" />
+                <Skeleton className="h-8 w-8 rounded-lg" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filteredStores.length === 0 ? (
         <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-500 text-sm">
           No food stores match your search query.
         </div>
@@ -135,7 +193,11 @@ export default function StoresPage() {
             >
               <div className="relative h-32 bg-slate-100">
                 {store.cover_image ? (
-                  <img src={store.cover_image} alt={store.name} className="w-full h-full object-cover" />
+                  <img
+                    src={store.cover_image}
+                    alt={store.name}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <div className="w-full h-full bg-slate-200 flex items-center justify-center text-slate-400">
                     <StoreIcon className="w-8 h-8" />
@@ -143,24 +205,38 @@ export default function StoresPage() {
                 )}
                 {store.logo && (
                   <div className="absolute -bottom-4 left-4 w-12 h-12 bg-white rounded-xl p-1 border border-slate-200 shadow-xs">
-                    <img src={store.logo} alt={store.name} className="w-full h-full object-cover rounded-lg" />
+                    <img
+                      src={store.logo}
+                      alt={store.name}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
                   </div>
                 )}
               </div>
 
               <div className="p-5 pt-7 space-y-2 flex-1">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-base text-slate-900 line-clamp-1">{store.name}</h3>
+                  <h3 className="font-bold text-base text-slate-900 line-clamp-1">
+                    {store.name}
+                  </h3>
                   <span
                     className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                      store.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                      store.status === "active"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-100 text-slate-600"
                     }`}
                   >
                     {store.status}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 line-clamp-2">{store.description || 'No description provided.'}</p>
-                {store.address && <p className="text-[11px] text-slate-400 line-clamp-1">📍 {store.address}</p>}
+                <p className="text-xs text-slate-500 line-clamp-2">
+                  {store.description || "No description provided."}
+                </p>
+                {store.address && (
+                  <p className="text-[11px] text-slate-400 line-clamp-1">
+                    📍 {store.address}
+                  </p>
+                )}
               </div>
 
               <div className="p-4 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-2">
@@ -190,11 +266,12 @@ export default function StoresPage() {
         opened={importModalOpen}
         onClose={() => setImportModalOpen(false)}
         onImportSuccess={(res) => {
-          setToastMsg(`Successfully imported "${res.storeName || 'Store'}" with ${res.rowsCount} menu items!`);
+          setToastMsg(
+            `Successfully imported "${res.storeName || "Store"}" with ${res.rowsCount} menu items!`,
+          );
           loadStores();
         }}
       />
     </div>
   );
 }
-

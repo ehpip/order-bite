@@ -23,6 +23,7 @@ import {
 import CountdownBadge from "@/components/ui/countdown-badge";
 import ShareQRDialog from "@/components/share-qr-dialog";
 import { useAuth } from "@/lib/auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
   const { user, hostIdentifier, isHostOwner, loginWithGoogle, isLoading } =
@@ -32,10 +33,11 @@ export default function DashboardPage() {
   const [allOrders, setAllOrders] = useState<MemberOrder[]>([]);
   const [selectedShareSession, setSelectedShareSession] =
     useState<OrderSession | null>(null);
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
-      // Fetch sessions for this host/device context
+      setDataLoading(true);
       const sessList = await db.getSessions(hostIdentifier);
       setSessions(sessList);
 
@@ -48,6 +50,7 @@ export default function DashboardPage() {
         ordersList.push(...sOrders);
       }
       setAllOrders(ordersList);
+      setDataLoading(false);
     }
     if (!isLoading) {
       loadData();
@@ -108,69 +111,101 @@ export default function DashboardPage() {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-bold uppercase tracking-wider">
-              Active Orders
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
-              <ListOrdered className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-extrabold text-slate-900">
-            {activeSessionsCount}
-          </div>
-          <p className="text-[11px] text-slate-500">
-            Open sessions taking orders
-          </p>
-        </div>
+        {dataLoading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            ))
+          : [
+              <div
+                key="active"
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-2"
+              >
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    Active Orders
+                  </span>
+                  <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
+                    <ListOrdered className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-extrabold text-slate-900">
+                  {activeSessionsCount}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Open sessions taking orders
+                </p>
+              </div>,
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-bold uppercase tracking-wider font-semibold">
-              Food Stores
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <StoreIcon className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-extrabold text-slate-900">
-            {stores.length}
-          </div>
-          <p className="text-[11px] text-slate-500">Reusable store menus</p>
-        </div>
+              <div
+                key="stores"
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-2"
+              >
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-xs font-bold uppercase tracking-wider font-semibold">
+                    Food Stores
+                  </span>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                    <StoreIcon className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-extrabold text-slate-900">
+                  {stores.length}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Reusable store menus
+                </p>
+              </div>,
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-bold uppercase tracking-wider font-semibold">
-              Unpaid Members
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
-              <AlertCircle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-extrabold text-rose-600">
-            {unpaidOrdersCount}
-          </div>
-          <p className="text-[11px] text-slate-500">Members owing payment</p>
-        </div>
+              <div
+                key="unpaid"
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-2"
+              >
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-xs font-bold uppercase tracking-wider font-semibold">
+                    Unpaid Members
+                  </span>
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
+                    <AlertCircle className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-extrabold text-rose-600">
+                  {unpaidOrdersCount}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Members owing payment
+                </p>
+              </div>,
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-bold uppercase tracking-wider font-semibold">
-              Total Volume
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-              <DollarSign className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-extrabold text-slate-900">
-            {formatCurrency(totalVolume)}
-          </div>
-          <p className="text-[11px] text-slate-500">
-            Combined group food orders
-          </p>
-        </div>
+              <div
+                key="volume"
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-2"
+              >
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-xs font-bold uppercase tracking-wider font-semibold">
+                    Total Volume
+                  </span>
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-extrabold text-slate-900">
+                  {formatCurrency(totalVolume)}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Combined group food orders
+                </p>
+              </div>,
+            ]}
       </div>
 
       {/* Active Group Orders Section */}
@@ -192,7 +227,23 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {sessions.length === 0 ? (
+        {dataLoading ? (
+          <div className="divide-y divide-slate-100">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-4 sm:p-5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-full max-w-md" />
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-3 w-40" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : sessions.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500">
             No sessions created yet.
           </div>
@@ -274,41 +325,57 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {stores.map((store) => (
-            <div
-              key={store.id}
-              className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 flex flex-col justify-between"
-            >
-              <div className="flex items-center gap-3">
-                {store.logo ? (
-                  <img
-                    src={store.logo}
-                    alt={store.name}
-                    className="w-10 h-10 rounded-xl object-cover border"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-sm">
-                    {store.name.charAt(0)}
+          {dataLoading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-xl" />
+                    <div className="space-y-1.5 flex-1">
+                      <Skeleton className="h-4 w-full max-w-[120px]" />
+                      <Skeleton className="h-3 w-full max-w-[100px]" />
+                    </div>
                   </div>
-                )}
-                <div className="min-w-0">
-                  <h3 className="font-bold text-xs sm:text-sm text-slate-900 truncate">
-                    {store.name}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 truncate">
-                    {store.address || "Standard Store"}
-                  </p>
+                  <Skeleton className="h-7 w-full rounded-lg" />
                 </div>
-              </div>
+              ))
+            : stores.map((store) => (
+                <div
+                  key={store.id}
+                  className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 flex flex-col justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    {store.logo ? (
+                      <img
+                        src={store.logo}
+                        alt={store.name}
+                        className="w-10 h-10 rounded-xl object-cover border"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-sm">
+                        {store.name.charAt(0)}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-xs sm:text-sm text-slate-900 truncate">
+                        {store.name}
+                      </h3>
+                      <p className="text-[11px] text-slate-500 truncate">
+                        {store.address || "Standard Store"}
+                      </p>
+                    </div>
+                  </div>
 
-              <Link
-                href={`/dashboard/stores/${store.id}`}
-                className="block text-center text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 py-1.5 rounded-lg transition-colors border border-orange-200"
-              >
-                View Store Menu
-              </Link>
-            </div>
-          ))}
+                  <Link
+                    href={`/dashboard/stores/${store.id}`}
+                    className="block text-center text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 py-1.5 rounded-lg transition-colors border border-orange-200"
+                  >
+                    View Store Menu
+                  </Link>
+                </div>
+              ))}
         </div>
       </div>
 

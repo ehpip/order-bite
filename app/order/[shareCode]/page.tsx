@@ -32,6 +32,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import CountdownBadge from "@/components/ui/countdown-badge";
 import { getInitials, getAvatarColor } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function PublicMemberOrderPage({
   params,
@@ -46,6 +47,7 @@ export default function PublicMemberOrderPage({
   const [existingOrder, setExistingOrder] = useState<MemberOrder | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [allOrders, setAllOrders] = useState<MemberOrder[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
   // Member Identity
   const [memberName, setMemberName] = useState<string>("");
@@ -132,9 +134,11 @@ export default function PublicMemberOrderPage({
   };
 
   async function loadData() {
+    setDataLoading(true);
     const sess = await db.getSessionByShareCode(shareCode);
     if (!sess) {
       setNotFound(true);
+      setDataLoading(false);
       return;
     }
     setSession(sess);
@@ -148,7 +152,6 @@ export default function PublicMemberOrderPage({
     const sessionOrders = await db.getOrdersForSession(sess.id);
     setAllOrders(sessionOrders);
 
-    // Check if member already entered name on this device
     const savedName = localStorage.getItem(`member_name_${sess.id}`);
     const savedMemberId = localStorage.getItem(`member_id_${sess.id}`);
 
@@ -156,7 +159,6 @@ export default function PublicMemberOrderPage({
       if (savedName) setMemberName(savedName);
       setNameSubmitted(true);
 
-      // Fetch existing order if any (first by member_id, then fallback to member_name)
       let order: MemberOrder | null = null;
       if (savedMemberId) {
         order = await db.getOrderForMember(sess.id, savedMemberId);
@@ -175,7 +177,6 @@ export default function PublicMemberOrderPage({
 
       if (order) {
         setExistingOrder(order);
-        // Pre-fill cart with existing items matching snapshot items accurately
         const newCart = new Map<string, { quantity: number; notes: string }>();
         order.items.forEach((item) => {
           const match = items.find(
@@ -193,6 +194,7 @@ export default function PublicMemberOrderPage({
         setCart(newCart);
       }
     }
+    setDataLoading(false);
   }
 
   const handleStartOrdering = async (e: React.FormEvent) => {
@@ -474,13 +476,94 @@ export default function PublicMemberOrderPage({
     );
   }
 
-  if (!session) {
+  if (!session || dataLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 text-slate-500 text-sm flex-col gap-3">
-        <div className="w-7 h-7 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
-        <span className="font-medium text-slate-600">
-          Loading group order session...
-        </span>
+      <div className="min-h-screen bg-slate-50 pb-28">
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-3 shadow-2xs">
+          <div className="max-w-2xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Skeleton className="h-9 w-9 rounded-xl" />
+              <div className="min-w-0 space-y-1">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+            </div>
+            <Skeleton className="h-6 w-20 rounded-full" />
+          </div>
+        </header>
+
+        <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1.5">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-5/6" />
+            <Skeleton className="h-3 w-4/6" />
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <div className="space-y-1">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-3 w-28" />
+                </div>
+              </div>
+              <div className="flex -space-x-1.5">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton
+                    key={i}
+                    className="h-6 w-6 rounded-full border-2 border-white"
+                  />
+                ))}
+              </div>
+            </div>
+            <Skeleton className="h-3 w-64 mx-auto" />
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center space-y-4 my-6">
+            <Skeleton className="h-12 w-12 rounded-2xl mx-auto" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-6 w-52 mx-auto" />
+              <Skeleton className="h-4 w-72 mx-auto" />
+            </div>
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          </div>
+
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
+            <Skeleton className="h-8 w-full rounded-xl" />
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-7 w-28 rounded-xl shrink-0" />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="p-4 rounded-2xl border shadow-2xs flex gap-3.5 items-center bg-white border-slate-200"
+              >
+                <Skeleton className="h-20 w-20 rounded-xl shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <Skeleton className="h-5 w-full max-w-[200px]" />
+                  <div className="flex items-center gap-1.5">
+                    <Skeleton className="h-4 w-20 rounded-md" />
+                  </div>
+                  <Skeleton className="h-3 w-full max-w-[260px]" />
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <Skeleton className="h-7 w-7 rounded-lg" />
+                  <Skeleton className="h-6 w-10 rounded-md" />
+                  <Skeleton className="h-7 w-7 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </main>
       </div>
     );
   }

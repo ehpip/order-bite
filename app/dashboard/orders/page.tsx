@@ -24,6 +24,7 @@ import {
 import CountdownBadge from "@/components/ui/countdown-badge";
 import ShareQRDialog from "@/components/share-qr-dialog";
 import { useAuth } from "@/lib/auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SessionsListPage() {
   const { user, hostIdentifier, isHostOwner, loginWithGoogle, isLoading } =
@@ -37,6 +38,7 @@ export default function SessionsListPage() {
     "all",
   );
   const [shareSession, setShareSession] = useState<OrderSession | null>(null);
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     if (!isLoading) {
@@ -45,6 +47,7 @@ export default function SessionsListPage() {
   }, [user, hostIdentifier, isLoading]);
 
   async function loadSessions() {
+    setDataLoading(true);
     const list = await db.getSessions(hostIdentifier);
     setSessions(list);
 
@@ -54,6 +57,7 @@ export default function SessionsListPage() {
       map.set(s.id, orders);
     }
     setOrdersMap(map);
+    setDataLoading(false);
   }
 
   const filteredSessions = sessions.filter((s) => {
@@ -115,7 +119,40 @@ export default function SessionsListPage() {
       </div>
 
       {/* Sessions Grid */}
-      {filteredSessions.length === 0 ? (
+      {dataLoading ? (
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4"
+            >
+              <div className="space-y-2.5 max-w-xl flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-5 w-16 rounded" />
+                </div>
+                <Skeleton className="h-3 w-full max-w-lg" />
+                <div className="flex flex-wrap items-center gap-4">
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-3 w-36" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between md:justify-end gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-3 w-16 ml-auto" />
+                  <Skeleton className="h-6 w-20 ml-auto" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-9 w-9 rounded-xl" />
+                  <Skeleton className="h-9 w-28 rounded-xl" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filteredSessions.length === 0 ? (
         <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-500 text-sm">
           No group order sessions found. Click &quot;+ Create Group Order&quot;
           to start!
