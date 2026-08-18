@@ -762,6 +762,28 @@ class LocalDatabase {
     this.persistAll();
   }
 
+  async cancelMemberOrder(orderId: string): Promise<MemberOrder | null> {
+    const idx = this.orders.findIndex((o) => o.id === orderId);
+    if (idx < 0) return null;
+    const sessionId = this.orders[idx].session_id;
+    const updated = {
+      ...this.orders[idx],
+      status: "cancelled" as const,
+      items: [],
+      food_subtotal: 0,
+      shipping_share: 0,
+      grand_total: 0,
+      payment_status: "unpaid" as const,
+      amount_paid: undefined,
+      payment_reset_notice: false,
+      updated_at: new Date().toISOString(),
+    };
+    this.orders[idx] = updated;
+    this.recalculateSessionOrderTotals(sessionId);
+    this.persistAll();
+    return updated;
+  }
+
   /**
    * Recalculates shipping share for all submitted member orders in a session
    */
@@ -1883,6 +1905,42 @@ class SupabaseDatabase {
     await localDb.deleteMemberOrder(orderId);
   }
 
+  async cancelMemberOrder(orderId: string): Promise<MemberOrder | null> {
+    const client = this.client;
+    if (!client) return localDb.cancelMemberOrder(orderId);
+    const validOrderUuid = toValidUuidOrNull(orderId);
+    if (!validOrderUuid) return localDb.cancelMemberOrder(orderId);
+
+    const now = new Date().toISOString();
+    const { data, error } = await client
+      .from("member_orders")
+      .update({
+        status: "cancelled",
+        food_subtotal: 0,
+        shipping_share: 0,
+        grand_total: 0,
+        payment_status: "unpaid",
+        amount_paid: null,
+        payment_reset_notice: false,
+        updated_at: now,
+      })
+      .eq("id", validOrderUuid)
+      .select()
+      .single();
+
+    if (error || !data) return localDb.cancelMemberOrder(orderId);
+
+    await client
+      .from("member_order_items")
+      .delete()
+      .eq("order_id", validOrderUuid);
+
+    await this.recalculateSessionOrderTotals(data.session_id);
+
+    const localResult = await localDb.cancelMemberOrder(orderId);
+    return localResult || { ...data, items: [] };
+  }
+
   private async recalculateSessionOrderTotals(sessionId: string) {
     const client = this.client;
     if (!client) return;
@@ -2053,6 +2111,9 @@ class DatabaseService {
   }
   deleteMemberOrder(orderId: string) {
     return this.activeDb.deleteMemberOrder(orderId);
+  }
+  cancelMemberOrder(orderId: string) {
+    return this.activeDb.cancelMemberOrder(orderId);
   }
 }
 

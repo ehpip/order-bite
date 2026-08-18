@@ -447,6 +447,120 @@ export default function PublicMemberOrderPage({
     loadData();
   };
 
+  const handleCancelEntireOrder = async () => {
+    if (!existingOrder) return;
+    if (
+      !confirm(
+        "Are you sure you want to cancel your entire order? This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await db.cancelMemberOrder(existingOrder.id);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || "Failed to cancel order.");
+    }
+  };
+
+  const handleRemoveOrderItem = async (orderItem: {
+    snapshot_item_id: string;
+    item_name: string;
+  }) => {
+    if (!session || !memberName.trim() || !existingOrder) return;
+
+    // 1. Remove the item from cart state
+    const newCart = new Map(cart);
+    let keyToUse = orderItem.snapshot_item_id;
+    // Find exact key reference in the cart map (handles string/int id mismatch)
+    for (const k of newCart.keys()) {
+      if (String(k) === String(orderItem.snapshot_item_id)) {
+        keyToUse = k;
+        break;
+      }
+    }
+    // Also try to match by name in case snapshot_item_id is not in cart keys
+    if (!newCart.has(keyToUse)) {
+      for (const [k, _v] of newCart.entries()) {
+        const snapItem = snapshotItems.find(
+          (si) => String(si.id) === String(k),
+        );
+        if (
+          snapItem &&
+          snapItem.name.trim().toLowerCase() ===
+            orderItem.item_name.trim().toLowerCase()
+        ) {
+          keyToUse = k;
+          break;
+        }
+      }
+    }
+    newCart.delete(keyToUse);
+
+    // Count remaining cart items
+    let remainingCount = 0;
+    newCart.forEach((val) => (remainingCount += val.quantity));
+
+    if (remainingCount === 0) {
+      // Last item removed — cancel the whole order
+      if (
+        !confirm(
+          "Removing the last item will cancel your entire order. Is that OK?",
+        )
+      ) {
+        return;
+      }
+      try {
+        await db.cancelMemberOrder(existingOrder.id);
+        loadData();
+      } catch (err: any) {
+        alert(err.message || "Failed to remove item.");
+      }
+      return;
+    }
+
+    // 2. Re-submit the order with the updated cart
+    setCart(newCart);
+
+    try {
+      setSubmitting(true);
+
+      const memberId =
+        localStorage.getItem(`member_id_${session.id}`) || `mem-${Date.now()}`;
+
+      const reqItems = Array.from(newCart.entries()).map(([itemId, val]) => {
+        const match = snapshotItems.find(
+          (i) => String(i.id) === String(itemId),
+        );
+        return {
+          snapshot_item_id: match ? match.id : itemId,
+          quantity: val.quantity,
+          notes: val.notes,
+        };
+      });
+
+      const submittedOrder = await db.submitMemberOrder({
+        session_id: session.id,
+        member_id: memberId,
+        member_name: memberName.trim(),
+        items: reqItems,
+      });
+
+      setExistingOrder(submittedOrder);
+      setSuccessMessage(`Removed "${orderItem.item_name}" from your order.`);
+      loadData();
+
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+    } catch (err: any) {
+      alert(err.message || "Failed to remove item.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (notFound) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
@@ -762,7 +876,31 @@ export default function PublicMemberOrderPage({
             )}
 
             {/* Existing Submitted Order Summary Banner — NOW AT THE TOP */}
-            {existingOrder && (
+            {existingOrder && existingOrder.status === "cancelled" ? (
+              <div className="bg-slate-100 border border-slate-300 p-4 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <X className="w-5 h-5 text-slate-500" />
+                    <div>
+                      <div className="text-sm font-extrabold text-slate-800">
+                        Order Cancelled
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Hi {existingOrder.member_name}, your order was cancelled
+                        on {formatDate(existingOrder.updated_at)}.
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wide bg-slate-200 text-slate-600 px-2 py-1 rounded-full">
+                    Cancelled
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 bg-white/70 p-2.5 rounded-xl border border-slate-200">
+                  You can still add new items below and submit a fresh order
+                  while the session is open.
+                </div>
+              </div>
+            ) : existingOrder ? (
               <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -795,15 +933,46 @@ export default function PublicMemberOrderPage({
 
                 <div className="text-sm text-emerald-800 space-y-2 bg-white/80 p-2.5 rounded-xl">
                   {existingOrder.items.map((it, idx) => (
-                    <div key={idx} className="flex justify-between">
-                      <span>
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="flex-1 min-w-0">
                         - {it.quantity}x {it.item_name}
+                        {it.notes && (
+                          <span className="block text-[10px] text-slate-500 italic truncate">
+                            Note: {it.notes}
+                          </span>
+                        )}
                       </span>
-                      <span className="font-semibold">
-                        {formatCurrency(it.subtotal)}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-semibold">
+                          {formatCurrency(it.subtotal)}
+                        </span>
+                        {!isClosed && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleRemoveOrderItem({
+                                snapshot_item_id: it.snapshot_item_id,
+                                item_name: it.item_name,
+                              })
+                            }
+                            className="w-6 h-6 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center transition-colors cursor-pointer"
+                            title={`Remove ${it.item_name} from order`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
+                  {!isClosed && existingOrder.payment_status === "unpaid" && (
+                    <div className="pt-1 border-t border-emerald-100 text-[10px] text-emerald-600 flex items-center gap-1">
+                      <X className="w-3 h-3" />
+                      Tap the ✕ on an item to remove it from your order
+                    </div>
+                  )}
                 </div>
 
                 {/* Overpayment Notice — shown when more people joined after you paid */}
@@ -1003,7 +1172,7 @@ export default function PublicMemberOrderPage({
                   </div>
                 )}
 
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
                   {existingOrder.payment_status === "unpaid" ? (
                     <button
                       onClick={handleReportPayment}
@@ -1012,17 +1181,26 @@ export default function PublicMemberOrderPage({
                       I&apos;ve Paid
                     </button>
                   ) : existingOrder.payment_status === "payment_reported" ? (
-                    <span className="flex-1 bg-amber-100 text-amber-800 font-bold text-xs py-1.5 rounded-xl text-center">
+                    <span className="flex-1 bg-amber-100 text-amber-800 font-bold text-xs py-1.5 rounded-xl text-center flex items-center justify-center">
                       ⏳ Payment Reported (Host verifying)
                     </span>
                   ) : (
-                    <span className="flex-1 bg-emerald-200 text-emerald-900 font-bold text-xs py-1.5 rounded-xl text-center">
+                    <span className="flex-1 bg-emerald-200 text-emerald-900 font-bold text-xs py-1.5 rounded-xl text-center flex items-center justify-center">
                       ✓ Payment Confirmed
                     </span>
                   )}
+                  {!isClosed && (
+                    <button
+                      onClick={handleCancelEntireOrder}
+                      disabled={submitting}
+                      className="sm:w-auto bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs py-2 px-4 rounded-xl transition-colors text-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Cancel Order
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* Participants Section — NOW BELOW the order banner */}
             {session && (
@@ -1099,14 +1277,23 @@ export default function PublicMemberOrderPage({
                               )}
                             </div>
                             <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                              {order.items.length > 0
-                                ? order.items
-                                    .map((i) => `${i.quantity}x ${i.item_name}`)
-                                    .join(", ")
-                                : "No items ordered yet"}
+                              {order.status === "cancelled"
+                                ? "Order cancelled"
+                                : order.items.length > 0
+                                  ? order.items
+                                      .map(
+                                        (i) => `${i.quantity}x ${i.item_name}`,
+                                      )
+                                      .join(", ")
+                                  : "No items ordered yet"}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
-                              {order.payment_status === "paid" ? (
+                              {order.status === "cancelled" ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                                  <X className="w-3 h-3" />
+                                  Cancelled
+                                </span>
+                              ) : order.payment_status === "paid" ? (
                                 <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
                                   <CheckCircle2 className="w-3 h-3" />
                                   Paid
@@ -1126,15 +1313,22 @@ export default function PublicMemberOrderPage({
                             </div>
                           </div>
                           <div className="shrink-0 text-right">
-                            <div className="text-xs font-extrabold text-slate-900">
+                            <div
+                              className={`text-xs font-extrabold ${
+                                order.status === "cancelled"
+                                  ? "text-slate-400 line-through"
+                                  : "text-slate-900"
+                              }`}
+                            >
                               {formatCurrency(order.grand_total)}
                             </div>
                             <div className="text-[10px] text-slate-500">
-                              {order.items.reduce(
-                                (sum, i) => sum + i.quantity,
-                                0,
-                              )}{" "}
-                              items
+                              {order.status === "cancelled"
+                                ? "—"
+                                : `${order.items.reduce(
+                                    (sum, i) => sum + i.quantity,
+                                    0,
+                                  )} items`}
                             </div>
                           </div>
                         </div>
@@ -1148,15 +1342,21 @@ export default function PublicMemberOrderPage({
                     <span>
                       Total Collected (
                       {
-                        allOrders.filter((o) => o.payment_status === "paid")
-                          .length
+                        allOrders.filter(
+                          (o) =>
+                            o.status !== "cancelled" &&
+                            o.payment_status === "paid",
+                        ).length
                       }
-                      /{allOrders.length} paid)
+                      /
+                      {allOrders.filter((o) => o.status !== "cancelled").length}{" "}
+                      paid)
                     </span>
                     <span className="font-extrabold text-slate-900">
                       {formatCurrency(
                         allOrders.reduce(
                           (sum, o) =>
+                            o.status !== "cancelled" &&
                             o.payment_status === "paid"
                               ? sum + o.grand_total
                               : sum,
@@ -1165,7 +1365,13 @@ export default function PublicMemberOrderPage({
                       )}{" "}
                       /{" "}
                       {formatCurrency(
-                        allOrders.reduce((sum, o) => sum + o.grand_total, 0),
+                        allOrders.reduce(
+                          (sum, o) =>
+                            o.status !== "cancelled"
+                              ? sum + o.grand_total
+                              : sum,
+                          0,
+                        ),
                       )}
                     </span>
                   </div>

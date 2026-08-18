@@ -354,10 +354,14 @@ export default function SessionManagementPage({
   }
 
   // Calculate totals
-  const totalFoodSubtotal = orders.reduce((sum, o) => sum + o.food_subtotal, 0);
+  const activeOrders = orders.filter((o) => o.status !== "cancelled");
+  const totalFoodSubtotal = activeOrders.reduce(
+    (sum, o) => sum + o.food_subtotal,
+    0,
+  );
   const grandTotal = totalFoodSubtotal + session.shipping_cost;
-  const paidOrders = orders.filter((o) => o.payment_status === "paid");
-  const unpaidOrders = orders.filter((o) => o.payment_status !== "paid");
+  const paidOrders = activeOrders.filter((o) => o.payment_status === "paid");
+  const unpaidOrders = activeOrders.filter((o) => o.payment_status !== "paid");
   const totalPaidAmount = paidOrders.reduce((sum, o) => sum + o.grand_total, 0);
   const totalUnpaidAmount = unpaidOrders.reduce(
     (sum, o) => sum + o.grand_total,
@@ -376,7 +380,7 @@ export default function SessionManagementPage({
     string,
     { name: string; quantity: number; unitPrice: number; total: number }
   >();
-  orders.forEach((o) => {
+  activeOrders.forEach((o) => {
     o.items.forEach((item) => {
       const key = item.item_name;
       if (!itemAggregationMap.has(key)) {
@@ -398,7 +402,7 @@ export default function SessionManagementPage({
 
   // Aggregate quantities by snapshot_item_id for limit checking
   const snapshotItemOrdered = new Map<string, number>();
-  orders.forEach((o) => {
+  activeOrders.forEach((o) => {
     o.items.forEach((item) => {
       snapshotItemOrdered.set(
         item.snapshot_item_id,
@@ -653,10 +657,15 @@ export default function SessionManagementPage({
             Total Members
           </div>
           <div className="text-2xl font-extrabold text-slate-900">
-            {orders.length} people
+            {activeOrders.length} people
           </div>
           <p className="text-[11px] text-slate-500">
             {paidOrders.length} paid · {unpaidOrders.length} unpaid
+            {orders.length > activeOrders.length && (
+              <span className="ml-1.5 text-slate-400">
+                · {orders.length - activeOrders.length} cancelled
+              </span>
+            )}
           </p>
         </div>
 
@@ -680,10 +689,11 @@ export default function SessionManagementPage({
             {formatShippingCost(session.shipping_cost)}
           </div>
           <p className="text-[11px] text-slate-500">
-            {session.shipping_split_method === "equal" && orders.length > 0
+            {session.shipping_split_method === "equal" &&
+            activeOrders.length > 0
               ? session.shipping_cost <= 0
                 ? "Free"
-                : `${formatCurrency(Math.round(session.shipping_cost / orders.length))} / person`
+                : `${formatCurrency(Math.round(session.shipping_cost / activeOrders.length))} / person`
               : session.shipping_split_method}
           </p>
         </div>
@@ -822,7 +832,9 @@ export default function SessionManagementPage({
             </h2>
           </div>
           <span className="text-xs text-slate-500">
-            {orders.length} Members
+            {activeOrders.length} Active
+            {orders.length > activeOrders.length &&
+              ` · ${orders.length - activeOrders.length} Cancelled`}
           </span>
         </div>
 
@@ -835,11 +847,17 @@ export default function SessionManagementPage({
             {orders.map((order) => {
               const isPaid = order.payment_status === "paid";
               const isReported = order.payment_status === "payment_reported";
+              const isCancelled = order.status === "cancelled";
               const enriched = enrichedOrders.find((eo) => eo.id === order.id);
               const overpaidAmt = enriched?.overpaid_amount ?? 0;
 
               return (
-                <div key={order.id} className="p-5 space-y-3">
+                <div
+                  key={order.id}
+                  className={`p-5 space-y-3 ${
+                    isCancelled ? "opacity-70 bg-slate-50/60" : ""
+                  }`}
+                >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -848,20 +866,24 @@ export default function SessionManagementPage({
                         </span>
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            isPaid
-                              ? "bg-emerald-100 text-emerald-800"
-                              : isReported
-                                ? "bg-amber-100 text-amber-800 animate-pulse"
-                                : "bg-rose-100 text-rose-800"
+                            isCancelled
+                              ? "bg-slate-200 text-slate-600"
+                              : isPaid
+                                ? "bg-emerald-100 text-emerald-800"
+                                : isReported
+                                  ? "bg-amber-100 text-amber-800 animate-pulse"
+                                  : "bg-rose-100 text-rose-800"
                           }`}
                         >
-                          {isPaid
-                            ? "✓ Paid"
-                            : isReported
-                              ? "⏳ Payment Reported"
-                              : "❌ Unpaid"}
+                          {isCancelled
+                            ? "❌ Cancelled"
+                            : isPaid
+                              ? "✓ Paid"
+                              : isReported
+                                ? "⏳ Payment Reported"
+                                : "❌ Unpaid"}
                         </span>
-                        {overpaidAmt > 0 && (
+                        {overpaidAmt > 0 && !isCancelled && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
                             <RefreshCw className="w-2.5 h-2.5" />
                             Owes +{formatCurrency(overpaidAmt)} back
@@ -869,17 +891,21 @@ export default function SessionManagementPage({
                         )}
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Food: {formatCurrency(order.food_subtotal)} + Shipping
-                        Share: {formatShippingCost(order.shipping_share)}
-                        {overpaidAmt > 0 && (
-                          <span className="text-sky-600 ml-1.5">
-                            · Fair now:{" "}
-                            {formatShippingCost(
-                              enriched!.current_fair_shipping_share,
-                            )}{" "}
-                            shipping
-                          </span>
-                        )}
+                        {isCancelled
+                          ? `Cancelled on ${formatDate(order.updated_at)}`
+                          : `Food: ${formatCurrency(order.food_subtotal)} + Shipping Share: ${formatShippingCost(order.shipping_share)}${
+                              overpaidAmt > 0 ? (
+                                <span className="text-sky-600 ml-1.5">
+                                  · Fair now:{" "}
+                                  {formatShippingCost(
+                                    enriched!.current_fair_shipping_share,
+                                  )}{" "}
+                                  shipping
+                                </span>
+                              ) : (
+                                ""
+                              )
+                            }`}
                       </p>
                     </div>
 
@@ -888,10 +914,16 @@ export default function SessionManagementPage({
                         <div className="text-[10px] text-slate-400 font-medium">
                           Total Owed
                         </div>
-                        <div className="text-sm font-extrabold text-slate-900">
+                        <div
+                          className={`text-sm font-extrabold ${
+                            isCancelled
+                              ? "text-slate-400 line-through"
+                              : "text-slate-900"
+                          }`}
+                        >
                           {formatCurrency(order.grand_total)}
                         </div>
-                        {overpaidAmt > 0 && (
+                        {overpaidAmt > 0 && !isCancelled && (
                           <div className="text-[10px] font-bold text-sky-600">
                             Overpaid by {formatCurrency(overpaidAmt)}
                           </div>
@@ -899,36 +931,41 @@ export default function SessionManagementPage({
                       </div>
 
                       {/* Payment Toggle Action */}
-                      <div className="flex items-center gap-1">
-                        {!isPaid ? (
+                      {!isCancelled && (
+                        <div className="flex items-center gap-1">
+                          {!isPaid ? (
+                            <button
+                              onClick={() =>
+                                handleUpdatePayment(order.id, "paid")
+                              }
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                            >
+                              Mark as Paid
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                handleUpdatePayment(order.id, "unpaid")
+                              }
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                            >
+                              Mark Unpaid
+                            </button>
+                          )}
                           <button
                             onClick={() =>
-                              handleUpdatePayment(order.id, "paid")
+                              handleDeleteMemberOrder(
+                                order.id,
+                                order.member_name,
+                              )
                             }
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
+                            title="Remove Order"
                           >
-                            Mark as Paid
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              handleUpdatePayment(order.id, "unpaid")
-                            }
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-                          >
-                            Mark Unpaid
-                          </button>
-                        )}
-                        <button
-                          onClick={() =>
-                            handleDeleteMemberOrder(order.id, order.member_name)
-                          }
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
-                          title="Remove Order"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
